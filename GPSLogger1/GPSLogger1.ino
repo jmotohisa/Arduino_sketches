@@ -88,6 +88,8 @@ void setup() {
   Serial.println("Ready");
 
   gps.begin(9600); // ソフトウェアシリアルの初期化
+  send_pmtk_packet("PMTK220,1000");
+  send_pmtk_packet("PMTK314,0,1,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0");
   Serial.println("GPS ready");
   
   pinMode(SD_CHIP_SELECT,OUTPUT);
@@ -147,3 +149,23 @@ void recvStr(char *buf)
   }
   buf[i] = '\0';  // \0: end of string
 }
+
+void send_pmtk_packet(char *p)
+{
+  uint8_t checksum = 0;
+  gps.print('$');
+  do {
+    char c = *p++;
+    if(c){
+      checksum ^= (uint8_t)c;
+      gps.print(c);
+    }
+    else{
+      break;
+    }
+  }
+  while(1);
+  gps.print('*');
+  gps.println(checksum,HEX);
+}
+
