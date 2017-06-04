@@ -28,10 +28,10 @@ Arudino-SDcard
 
 /* Arduino-GPS (Software Serial)
  *  RX: 8
- *   TX: 9
+ *  TX: 9
 */
  
-#include <LiquidCrystal.h>
+//#include <LiquidCrystal.h>
 #include <SPI.h>
 #include <SD.h>
 #include <SoftwareSerial.h>
@@ -40,7 +40,7 @@ Arudino-SDcard
 
 // initialize the library with the numbers of the interface pins
 /* lcd(RS, E, DB4, DB5, DB6, DB7) */
-LiquidCrystal lcd(7, 6,  5, 4, 3, 2);
+//LiquidCrystal lcd(7, 6,  5, 4, 3, 2);
 SoftwareSerial gps(8, 9); // RX, TX
 
 File logFile;
@@ -54,19 +54,19 @@ bool checkSDFile()
     for (unsigned int index = 0; index < 65535; index++) {
         char fileTmp[13];
         sprintf(fileTmp, "GPS%05d.TXT", index);
-        lcd.print(fileTmp);
+//        lcd.print(fileTmp);
         if (!SD.exists(fileTmp)) {
-            logFile = SD.open(filename, FILE_WRITE);
+            logFile = SD.open(fileTmp, FILE_WRITE);
             Serial.println(fileTmp);
             if (logFile) {
-                lcd.print("OK");
+//                lcd.print("OK");
                 Serial.println("Log file opend");
-                strcpy(fileTmp,filename);
+                strcpy(filename,fileTmp);
+                logFile.close();
                 return true;
             }
-            lcd.setCursor(0,1
-            );
-            lcd.print("Can't open file");
+//            lcd.setCursor(0,1);
+//            lcd.print("Can't open file");
             Serial.println("Can't open logfile");
             break;
         }
@@ -76,9 +76,9 @@ bool checkSDFile()
 
 void setup() {
   // set up the LCD's number of rows and columns: 
-  lcd.begin(16, 2);
-  lcd.clear();
-  lcd.print("Ready");
+//  lcd.begin(16, 2);
+//  lcd.clear();
+//  lcd.print("Ready");
 
 // Open serial communications and wait for port to open:
   Serial.begin(9600);
@@ -87,8 +87,9 @@ void setup() {
   }
   Serial.println("Ready");
 
-  gps.begin(4800); // ソフトウェアシリアルの初期化
-
+  gps.begin(9600); // ソフトウェアシリアルの初期化
+  Serial.println("GPS ready");
+  
   pinMode(SD_CHIP_SELECT,OUTPUT);
   if(SD.begin(SD_CHIP_SELECT)) {
     fileOpened = checkSDFile();
@@ -100,29 +101,35 @@ void loop()
 {
   char str[90]; // string buffer
   char *latitude,*longtude;
-  if(!fileOpened) {
-    logFile = SD.open(filename,FILE_WRITE);
-    fileOpened=true;
+
+  if(fileOpened && !logFile)
+  {
+     logFile=SD.open(filename,FILE_WRITE);
   }
+  
   if (gps.available()) {  // if recived serial signal
     recvStr(str);   // read serial data to string buffer
+    Serial.println(str);
+    if(logFile) {
+        logFile.println(str);
+    }
     if(strcmp(strtok(str,","),"$GPRMC")==0){ //if RMC line
        strtok(NULL,",");
        strtok(NULL,",");
        latitude=strtok(NULL,","); //get latitude
        strtok(NULL,",");
        longtude=strtok(NULL,","); //get longtude
-       lcd.setCursor(0,0);
-       lcd.print(latitude); // show latitude
-       lcd.setCursor(0,1);
-       lcd.print(longtude); // show longtude
+//       lcd.setCursor(0,0);
+//       lcd.print(latitude); // show latitude
+//       lcd.setCursor(0,1);
+//       lcd.print(longtude); // show longtude
+       Serial.println(latitude);
+       Serial.println(longtude);
     }
-    Serial.println(str);
-    if(fileOpened) {
-     logFile.println(str);
+//    Serial.println(str);
+  }
+  if(logFile) {
     logFile.close();
-    fileOpened=false;
-    }
   }
 }
 

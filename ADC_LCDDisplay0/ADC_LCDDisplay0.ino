@@ -1,6 +1,6 @@
-/* ADC and LCD
+/* ADC and LCD to read and display analog out of Varian Multiguage
 
-  The circuit:
+  The circuit:LCD 1602
  * LCD RS pin to digital pin 12
  * LCD Enable pin to digital pin 11
  * LCD D4 pin to digital pin 5
