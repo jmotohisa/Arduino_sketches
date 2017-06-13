@@ -26,9 +26,10 @@ Arudino-SDcard
  * wiper to LCD VO pin (pin 3)
 */
 
-/* Arduino-GPS (Software Serial)
- *  RX: 8
- *  TX: 9
+/* Arduino-GPS GT-720F (with Software Serial)
+ *  RX: 8 - 6
+ *  TX: 9 - 5
+ *  5: input (TTL) - 9 (TX) - 6: output (TTL) - 8 (RX)
 */
  
 //#include <LiquidCrystal.h>
@@ -88,9 +89,16 @@ void setup() {
   Serial.println("Ready");
 
   gps.begin(9600); // ソフトウェアシリアルの初期化
-  send_pmtk_packet("PMTK220,1000");
-  send_pmtk_packet("PMTK314,0,1,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0");
-  Serial.println("GPS ready");
+  // taken from http://arms22.blog91.fc2.com/blog-entry-299.html
+//  send_pmtk_packet("PMTK220,1000");
+//  send_pmtk_packet("PMTK314,0,1,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0");
+//  send_pmtk_packet("PSRF103,2,0,0,1");
+//  send_pmtk_packet("PSRF103,3,0,0,1");
+//  send_pmtk_packet("PSRF103,5,0,0,1");
+
+//  byte message[]={0xA0, 0xA1, 0x00, 0x09, 0x08, 0x01, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x08, 0x0D, 0x0A};
+//  gps.write(message,sizeof(message)); // RMC and GGA message only
+//  Serial.println("GPS ready");
   
   pinMode(SD_CHIP_SELECT,OUTPUT);
   if(SD.begin(SD_CHIP_SELECT)) {
@@ -111,7 +119,7 @@ void loop()
   
   if (gps.available()) {  // if recived serial signal
     recvStr(str);   // read serial data to string buffer
-    Serial.println(str);
+  //  Serial.println(str);
     if(logFile) {
         logFile.println(str);
     }
@@ -125,8 +133,8 @@ void loop()
 //       lcd.print(latitude); // show latitude
 //       lcd.setCursor(0,1);
 //       lcd.print(longtude); // show longtude
-       Serial.println(latitude);
-       Serial.println(longtude);
+//       Serial.println(latitude);
+//       Serial.println(longtude);
     }
 //    Serial.println(str);
   }
