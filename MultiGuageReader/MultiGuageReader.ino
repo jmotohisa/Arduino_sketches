@@ -1,7 +1,7 @@
-/* ADC and 7sev Display
+/* Varian Multi guage reader 
+ *  with ADC and 7sev Display
  *  
   The circuit: Akizukidenshi LTC2450 ADC and my-8digit 7seg sheild
-
   
  * Akizukidenshi LTC2450 DIP module
  * 1 (+V) to VDD
@@ -14,6 +14,7 @@
  * my 8digit 7seg sheild
 
 */
+
 #include <SevenSeg.h>
 #include <SPI.h>
 
@@ -34,8 +35,7 @@ void setup() {
   disp.setTimer(1);
   disp.startTimer();
   
-// ADC
-
+  // ADC
   pinMode(CS,OUTPUT);
   SPI.begin();
   SPI.setBitOrder(MSBFIRST);
@@ -50,8 +50,9 @@ void setup() {
 void loop() {
  // put your main code here, to run repeatedly:
  
- int dig;
+ int dig,exp2;
  float exponent;
+ String s;
   
 // vout = analogRead(sensorPin)*4.883*0.001*2;
  digitalWrite(CS,LOW);
@@ -59,16 +60,21 @@ void loop() {
  l_data = SPI.transfer(0x00);
  digitalWrite(CS,HIGH);
 
- vout=m_data*0.039062+l_data*1.5259e-4;
+ /*  vout = (m_data*2^8+l_data)/2^16*2*5 (wihout divider); */
+ vout=(m_data*0.039062+l_data*1.5259e-4)*2;
  dig=(int) vout;
  exponent = pow(10,1-vout+dig);
-
+ exp2=exponent*100;
+ s=String(exp2);
+ s.concat(" -");
+ s.concat(String(dig));
 // Debug
  Serial.println(vout);
-
+ Serial.println(s);
+ 
 // disp.write(vout);
  
-    disp.write(vout);
+  disp.write(s);
   delay(500);
 }
 
