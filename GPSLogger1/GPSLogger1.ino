@@ -9,7 +9,6 @@ Arudino-SDcard
  ** CLK - pin 13 on Arduino Uno/Duemilanove/Diecimila
  ** CS - depends on your SD card shield or module. ->10
 */
-
 /* Arduino-LCD
   The circuit:
  * LCD RS pin to digital pin 12 -> 7
