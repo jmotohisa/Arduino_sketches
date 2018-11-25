@@ -136,6 +136,7 @@ void loop()
     }
     if (strcmp(strtok(str, ","), "$GNRMC") == 0) { //if RMC line
       strtok(NULL, ",");
+      strtok(NULL, ",");
       latitude = strtok(NULL, ","); //get latitude
       strtok(NULL, ",");
       longtude = strtok(NULL, ","); //get longitude
