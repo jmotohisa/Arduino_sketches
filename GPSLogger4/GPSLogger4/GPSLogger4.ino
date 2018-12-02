@@ -46,7 +46,7 @@
   loop end
 
 */
-#include <Wire.h>
+//#include <Wire.h>
 #include <SPI.h>
 #include <SD.h>
 #include <SoftwareSerial.h>
@@ -54,6 +54,8 @@
 
 #define SD_CHIP_SELECT 10
 #define TimeZone (9)
+#define SW_PIN_NO 6
+#define LED_PIN_NO 7
 
 // initialize the library with the numbers of the interface pins
 SoftwareSerial gps(8, 9); // RX, TX
@@ -62,46 +64,22 @@ SoftwareSerial gps(8, 9); // RX, TX
 U8GLIB_SSD1306_128X64 u8g(U8G_I2C_OPT_NONE | U8G_I2C_OPT_DEV_0); // I2C / TWI
 
 File logFile;
+String utcDate, utcTime;
 
 int gpsHour, gpsMin, gpsSec;
 int gpsDay, gpsMonth, gpsYear;
 
-
+//char strbuf[100]; // string buffer
 char filename[13];
 bool fileEnable = false;
-
-bool checkSDFile()
-{
-  // open log file
-  for (unsigned int index = 0; index < 65535; index++) {
-    char fileTmp[13];
-    sprintf(fileTmp, "GPS%05d.TXT", index);
-    //        lcd.print(fileTmp);
-    if (!SD.exists(fileTmp)) {
-      logFile = SD.open(fileTmp, FILE_WRITE);
-      Serial.println(fileTmp);
-      if (logFile) {
-        //                lcd.print("OK");
-        Serial.println("Log file opened");
-        strcpy(filename, fileTmp);
-        logFile.close();
-        return true;
-      }
-      //            lcd.setCursor(0,1);
-      //            lcd.print("Can't open file");
-      Serial.println("Can't open logfile");
-      break;
-    }
-  }
-  return false;
-}
-
-bool configure_GP8013T(int timeout) {
-
-  return true;
-}
+bool runMode;
+bool logFileOpened;
 
 void setup() {
+
+  pinMode(LED_PIN_NO, OUTPUT) ;      // LEDに接続
+  pinMode(SW_PIN_NO, INPUT_PULLUP ) ; // SW に接続し内部プルアップに設定
+
   // Open serial communications and wait for port to open:
   Serial.begin(9600);
   while (!Serial) {
@@ -137,6 +115,7 @@ void setup() {
   configure_GP8013T(60);
   Serial.println("GPS ready");
 
+  delay(3000);
   // initialize SD card
   Serial.print("Initializing SD card...");
   pinMode(SD_CHIP_SELECT, OUTPUT);
@@ -144,36 +123,53 @@ void setup() {
     fileEnable = checkSDFile();
   }
 
-  delay(3000);
+  runMode = 0;
 }
 
 void loop()
 {
-  char str[90]; // string buffer
+  char strbuf[90];
   char latitude[12], longtude[11];
   char *stat, *NS, *WE;
-  String utcTime, utcDate;
+  //  String utcTime, utcDate;
   String s, s0;
   int pos;
-  String localDate,localTime;
-  char localDate0[7],localTime0[7];
-  if (fileEnable)
-  {
-    logFile = SD.open(filename, FILE_WRITE);
+  String localDate, localTime;
+  char localDate0[7], localTime0[7];
+  int swStatus;
+
+  swStatus = digitalRead(SW_PIN_NO);
+  if (runMode == 1 && swStatus == LOW) {
+    runMode = 0; // logging turn off
+    Serial.println("logging off");
+    digitalWrite(LED_PIN_NO, LOW);
+    if (logFileOpened == true) {
+      logFile.close();
+      logFileOpened = false;
+    }
+  } else if (runMode == 0 && swStatus == HIGH) { // logging turn on
+    runMode = 1;
+    Serial.println("logging started...");
+    digitalWrite(LED_PIN_NO, HIGH);
+    if (logFileOpened == false && fileEnable == true) {
+      logFile = SD.open(filename, FILE_WRITE);
+      logFileOpened = true;
+    }
   }
 
   if (gps.available()) {  // if recived serial signal
-    recvStr(str);   // read serial data to string buffer
-    Serial.println(str);
-    if (logFile) {
-      logFile.println(str);
+    recvStr(strbuf);   // read serial data to string buffer
+    if (logFileOpened == true) {
+      logFile.println(strbuf);
+    } else {
+      Serial.println(strbuf);
     }
-    s = str;
+    s = String(strbuf);
     pos = s.indexOf("$GNRMC");
     if (pos >= 0) { // if RMC line
-//      strip_NMEA(s, &utcDate, pos, 9); strip date
-//      Serial.print("utcDate:");
-//      Serial.println(utcDate);
+      //      strip_NMEA(s, &utcDate, pos, 9); strip date
+      //      Serial.print("utcDate:");
+      //      Serial.println(utcDate);
       pos = strip_NMEA(s, &utcTime, pos, 1); // 1: utcTime
       pos = strip_NMEA(s, &s0,     pos, 1); // 2: status
       s0.toCharArray(stat, 1);
@@ -187,24 +183,27 @@ void loop()
       s0.toCharArray(WE, 1);
       pos = strip_NMEA(s, &utcDate, pos, 3); // 2: utcDate
 
-//      long l_utcTime = utcTime.toInt();
-//      long l_utcDate = utcDate.toInt();
-//      gpsDate(l_utcTime);
-//      gpsTime(l_utcDate);
-//      UCTtoLT();
+      //      long l_utcTime = utcTime.toInt();
+      //      long l_utcDate = utcDate.toInt();
+      //      gpsDate(l_utcTime);
+      //      gpsTime(l_utcDate);
+      //      UCTtoLT();
 
       u8g.firstPage();
       do {
         u8g.setFont(u8g_font_unifont);
         localTime = utcTime;
         localDate = utcDate;
-//        localTime=String(gpsHour)+String(gpsMin)+String(gpsSec);
-//        localDate=String(gpsYear)+String(gpsMonth)+String(gpsMonth);
-        utcTime.toCharArray(localTime0,7);
-        utcDate.toCharArray(localDate0,7);
+        //        localTime=String(gpsHour)+String(gpsMin)+String(gpsSec);
+        //        localDate=String(gpsYear)+String(gpsMonth)+String(gpsMonth);
+        utcTime.toCharArray(localTime0, 7);
+        utcDate.toCharArray(localDate0, 7);
 
-        byte ofs = u8g.drawStr(0, 18, localTime0);        
+        byte ofs = u8g.drawStr(0, 18, localTime0);
         u8g.drawStr(ofs + 10, 18, localDate0);
+        Serial.print(localTime0);
+        Serial.print(' ');
+        Serial.println(localDate0);
 
         if (*stat == 'A') {
           u8g.drawStr(0, 36, NS);
@@ -214,39 +213,32 @@ void loop()
         }
       } while (u8g.nextPage());
 
-      Serial.print(utcTime);
-      Serial.print(' ');
-      Serial.println(utcDate);
       Serial.print("latitude: ");
       Serial.println(latitude);
       Serial.print("longitude: ");
       Serial.println(longtude);
     }
-    //    Serial.println(str);
-  }
-  if (logFile) {
-    logFile.close();
   }
 }
 
-void recvStr(char *buf)
+void recvStr(char *strbuf)
 {
   int i = 0;
   char c;
   while (1) {
     if (gps.available()) {
       c = gps.read();
-      buf[i] = c;
+      strbuf[i] = c;
       if (c == '\n') break;
       i++;
     }
   }
-  buf[i] = '\0';  // \0: end of string
+  strbuf[i] = '\0';  // \0: end of string
 }
 
 int strip_NMEA(String s, String *message, int pos, int count)
 {
-  int pos0, pos1, pos0new, i = 0;
+  int pos0, pos1, i = 0;
   pos0 = pos;
   pos1 = s.indexOf(",", pos0);
   while (i < count) {
@@ -254,21 +246,89 @@ int strip_NMEA(String s, String *message, int pos, int count)
     pos1 = s.indexOf(",", pos0);
     i += 1;
   }
-  *message = s.substring(pos0, pos1);  
-/*  
-   Serial.print(s);
-    Serial.print(";");
-    Serial.print(pos);
-    Serial.print (",");
-    Serial.print(count);
-    Serial.print(";");
-    Serial.print(pos0);
-    Serial.print(",");
-    Serial.print(pos1);
-    Serial.print(",");
-    Serial.println(*message);
+  *message = s.substring(pos0, pos1);
+/*
+  Serial.print(s);
+  Serial.print(";");
+  Serial.print(pos);
+  Serial.print (",");
+  Serial.print(count);
+  Serial.print(";");
+  Serial.print(pos0);
+  Serial.print(",");
+  Serial.print(pos1);
+  Serial.print(",");
+  Serial.println(*message);
 */
   return pos1;
+}
+
+bool checkSDFile()
+{
+  // check log file
+  char strbuf[100];
+  int i, loopmax = 100, pos;
+  String s;
+  //  String utcTime, utcDate;
+  logFileOpened = false;
+
+  for (i = 0; i < loopmax; i++)
+  {
+    if (gps.available()) {  // if recived serial signal
+      recvStr(strbuf);   // read serial data to string buffer
+      s = String(strbuf);
+      pos = s.indexOf("$GNRMC");
+      if (pos >= 0) { // if RMC line
+        Serial.println(s);
+        strip_NMEA(s, &utcDate, pos, 9); // strip date
+        if (utcDate.length() > 0 ) { // if date utcDate is valid
+          pos = strip_NMEA(s, &utcTime, pos, 1); // 1: utcTime
+          uint16_t l_utcTime = utcTime.toInt();
+          uint16_t l_utcDate = utcDate.toInt();
+          gpsDate(l_utcTime);
+          gpsTime(l_utcDate);
+          // UCTtoLT();
+          utcDate = String("GP" + utcDate + ".txt");
+          char fileTmp[13];
+          utcDate.toCharArray(fileTmp, 13);
+          logFile = SD.open(fileTmp, FILE_WRITE);
+          Serial.print("Log file opend:");
+          Serial.println(fileTmp);
+          logFile.close();
+          SdFile::dateTimeCallback( &dateTime );
+          strcpy(filename, fileTmp);
+          return true;
+        }
+      }
+    }
+  }
+  /*
+    for (unsigned int index = 0; index < 65535; index++) {
+      char fileTmp[13];
+      sprintf(fileTmp, "GPS%05d.TXT", index);
+      //        lcd.print(fileTmp);
+      if (!SD.exists(fileTmp)) {
+        logFile = SD.open(fileTmp, FILE_WRITE);
+        Serial.println(fileTmp);
+        if (logFile) {
+          //                lcd.print("OK");
+          Serial.println("Log file opened");
+          strcpy(filename, fileTmp);
+          logFile.close();
+          return true;
+        }
+        Serial.println("Can't open logfile");
+        break;
+      }
+    }
+  */
+  Serial.println("Can't open logfile");
+  return false; // file could not created
+}
+
+bool configure_GP8013T(int timeout) {
+
+  return true;
 }
 
 // send NMEA command with checksum to gps (software serial)
@@ -289,10 +349,22 @@ void send_nmea_command(const char *p)
   while (1);
   gps.print('*');
   gps.println(checksum, HEX);
-  gps.print("\n\r");
+  //  gps.print("\n\r");
 }
+
+void dateTime(uint16_t* date, uint16_t* time)
+{
+
+  // GPSやRTCから日付と時間を取得
+  // FAT_DATEマクロでフィールドを埋めて日付を返す
+  *date = FAT_DATE(gpsYear, gpsMonth, gpsDay);
+
+  // FAT_TIMEマクロでフィールドを埋めて時間を返す
+  *time = FAT_TIME(gpsHour, gpsMin, gpsSec);
+}
+
 // UTC -> (gpsHour, gpsMin, gpsSec)
-void gpsTime(long UTC)
+void gpsTime(uint16_t UTC)
 {
   gpsHour = int(UTC / 10000);
   gpsMin = int(UTC % 10000 / 100);
@@ -307,7 +379,7 @@ void gpsTime(long UTC)
   }
 */
 // Date ->(gpsYear,gpsMonth,gpsYear)
-void gpsDate(long dateRead)
+void gpsDate(uint16_t dateRead)
 {
   gpsDay = int(dateRead / 10000);
   gpsMonth = int(dateRead % 10000 / 100);
@@ -316,9 +388,9 @@ void gpsDate(long dateRead)
 
 void UCTtoLT()
 {
-  int leap=(gpsYear%4)*4/gpsYear - (gpsYear%100)*100/gpsYear + (gpsYear%400)*400/gpsYear ;
-  int DaysAMonth[12] = {31, 28+leap, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
-  gpsHour +=TimeZone;
+  int leap = (gpsYear % 4) * 4 / gpsYear - (gpsYear % 100) * 100 / gpsYear + (gpsYear % 400) * 400 / gpsYear ;
+  int DaysAMonth[12] = {31, 28 + leap, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
+  gpsHour += TimeZone;
   if (gpsHour < 0)
   {
     gpsHour += 24;
