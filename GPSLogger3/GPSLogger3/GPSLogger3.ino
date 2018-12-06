@@ -28,6 +28,8 @@
 #include "U8glib.h"
 
 #define SD_CHIP_SELECT 10
+#define BUFSIZE 90
+#define BUF2SIZE 12
 
 // initialize the library with the numbers of the interface pins
 SoftwareSerial gps(8, 9); // RX, TX
@@ -95,7 +97,7 @@ void setup() {
   // initialize Software Serial and GT-720F
   gps.begin(9600); // ソフトウェアシリアルの初期化
   // configure output of GM-8013T
-  configure_GP8013T(60);
+//  configure_GP8013T(60);
   Serial.println("GPS ready");
 
   // initialize SD card
@@ -110,49 +112,44 @@ void setup() {
 
 void loop()
 {
-  char strbuf[90];
+  char strbuf[BUFSIZE];
+  char utcTime[10], utcDate[7];
   char latitude[11], longtude[12];
   char NS[2], WE[2];
-  //  String utcTime, utcDate;
-  String s, s0;
-  int pos;
-  String statGPS, localDate, localTime;
-  char localDate0[7], localTime0[7];
+  char statGPS[2];
+  char GPSStr[7];
+  char localTime0[10], localDate0[7];
+  int offset;
   int swStatus;
-  String utcTime, utcDate;
 
   if (gps.available()) {  // if recived serial signal
     recvStr(strbuf);   // read serial data to string buffer
-    s = String(strbuf);
     if (logFile) {
-      logFile.println(s);
+      logFile.println(strbuf);
       logFile.flush();
     }
-    pos = s.indexOf("$GNRMC");
-    Serial.println(s);
-    if (pos == 0) { // if RMC line
-      pos = strip_NMEA(s, &utcTime, pos, 1); // 1: utcTime
-      pos = strip_NMEA(s, &statGPS,  pos, 1); // 2: status
-      pos = strip_NMEA(s, &s0, pos, 1); // 3: latitude
-      s0.toCharArray(latitude, 11);
-      pos = strip_NMEA(s, &s0,     pos, 1); // 4: North/South
-      s0.toCharArray(NS, 2);
-      pos = strip_NMEA(s, &s0,     pos, 1); // 5: longitue
-      s0.toCharArray(longtude, 12);
-      pos = strip_NMEA(s, &s0,     pos, 1); // 6: West/East
-      s0.toCharArray(WE, 2);
-      pos = strip_NMEA(s, &utcDate, pos, 3); // 2: utcDate
+
+    offset = strip_NMEA(strbuf, GPSStr, 0, 1);
+
+    if (strcmp(GPSStr, "$GPRMC") == 0) { // if RMC line
+      offset = strip_NMEA(strbuf, utcTime, offset, 1); // utcTime
+      offset = strip_NMEA(strbuf, statGPS, offset, 1); // status
+      offset = strip_NMEA(strbuf, latitude, offset, 1); // latitue
+      offset = strip_NMEA(strbuf, NS, offset, 1); // N/W
+      offset = strip_NMEA(strbuf, longtude, offset, 1); // longitude
+      offset = strip_NMEA(strbuf, WE, offset, 1); // W/E
+      offset = strip_NMEA(strbuf, utcDate, offset, 3); // utcDate
 
       u8g.firstPage();
       do {
         u8g.setFont(u8g_font_unifont);
-        utcTime.toCharArray(localTime0, 7);
-        utcDate.toCharArray(localDate0, 7);
+        strcpy(localTime0,utcTime);
+        strcpy(localDate0,utcDate);
 
         byte ofs = u8g.drawStr(0, 18, localTime0);
         u8g.drawStr(ofs + 10, 18, localDate0);
 
-        if (statGPS.equals("A")) {
+        if (strchr(statGPS,'A')) {
           u8g.drawStr(0, 36, NS);
           u8g.drawStr(10, 36, latitude);
           u8g.drawStr(0, 48, WE);
@@ -188,32 +185,31 @@ void recvStr(char *strbuf)
   strbuf[i] = '\0';  // \0: end of string
 }
 
-int strip_NMEA(String s, String *message, int pos, int count)
+int strip_NMEA(const char *orig, char *str, int offset, int count)
 {
-  int pos0, pos1, i = 0;
-  pos0 = pos;
-  Serial.println(s);
-  pos1 = s.indexOf(",", pos0);
-  while (i < count) {
-    pos0 = pos1 + 1;
-    pos1 = s.indexOf(",", pos0);
-    i += 1;
+  char str0[BUFSIZE], s0[BUFSIZE], s1[BUF2SIZE];
+  int i, len;
+
+  for (i = 0; i < count; i++) {
+    strcpy(str0, orig + offset);
+    strcpy(s0, strchr(str0, ','));
+    len = strlen(str0) - strlen(s0);
+    strncpy(s1, str0, len); // len < BUF2SIZE +1 assumed
+    s1[len] = '\0';
+    offset += strlen(s1) + 1;
   }
-  *message = s.substring(pos0, pos1);
+  /* printf("%s ; %d ; %s\n",s1,len,str); */
+  strcpy(str, s1);
 
-  Serial.print(s);
+  // for debug
+  /*
+  Serial.print(orig);
   Serial.print(";");
-  Serial.print(pos);
-  Serial.print (",");
-  Serial.print(count);
+  Serial.print(offset);
   Serial.print(";");
-  Serial.print(pos0);
-  Serial.print(",");
-  Serial.print(pos1);
-  Serial.print(",");
-  Serial.println(*message);
-
-  return pos1;
+  Serial.println(str);
+*/
+  return offset;
 }
 
 void send_PUBX_packet(char *p)
@@ -233,7 +229,6 @@ void send_PUBX_packet(char *p)
   while (1);
   gps.print('*');
   gps.println(checksum, HEX);
-
 }
 
 void configure_GP8013T(int rate)
@@ -246,4 +241,3 @@ void configure_GP8013T(int rate)
   send_PUBX_packet("PUBX,40,GLL,0,5,0,5,0,0");
   send_PUBX_packet("PUBX,40,GSA,0,5,0,5,0,0");
 }
-
