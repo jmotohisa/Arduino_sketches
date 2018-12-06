@@ -95,7 +95,7 @@ void setup() {
   // initialize Software Serial and GT-720F
   gps.begin(9600); // ソフトウェアシリアルの初期化
   // configure output of GM-8013T
-  // configure_GP8013T(60);
+  configure_GP8013T(60);
   Serial.println("GPS ready");
 
   // initialize SD card
@@ -112,24 +112,24 @@ void loop()
 {
   char strbuf[90];
   char latitude[11], longtude[12];
-  char NS[2],WE[2];
+  char NS[2], WE[2];
   //  String utcTime, utcDate;
   String s, s0;
   int pos;
-  String statGPS,localDate, localTime;
+  String statGPS, localDate, localTime;
   char localDate0[7], localTime0[7];
   int swStatus;
   String utcTime, utcDate;
 
   if (gps.available()) {  // if recived serial signal
     recvStr(strbuf);   // read serial data to string buffer
-    Serial.println(strbuf);
+    s = String(strbuf);
     if (logFile) {
-      logFile.println(strbuf);
+      logFile.println(s);
       logFile.flush();
     }
-    s = String(strbuf);
     pos = s.indexOf("$GNRMC");
+    Serial.println(s);
     if (pos == 0) { // if RMC line
       pos = strip_NMEA(s, &utcTime, pos, 1); // 1: utcTime
       pos = strip_NMEA(s, &statGPS,  pos, 1); // 2: status
@@ -159,7 +159,7 @@ void loop()
           u8g.drawStr(10, 48, longtude);
         }
       } while (u8g.nextPage());
-/*
+
       Serial.print(localTime0);
       Serial.print(' ');
       Serial.println(localDate0);
@@ -167,7 +167,7 @@ void loop()
       Serial.println(latitude);
       Serial.print("longitude: ");
       Serial.println(longtude);
-*/      
+
     }
   }
 }
@@ -192,6 +192,7 @@ int strip_NMEA(String s, String *message, int pos, int count)
 {
   int pos0, pos1, i = 0;
   pos0 = pos;
+  Serial.println(s);
   pos1 = s.indexOf(",", pos0);
   while (i < count) {
     pos0 = pos1 + 1;
@@ -199,21 +200,50 @@ int strip_NMEA(String s, String *message, int pos, int count)
     i += 1;
   }
   *message = s.substring(pos0, pos1);
-/*  
-    Serial.print(s);
-    Serial.print(";");
-    Serial.print(pos);
-    Serial.print (",");
-    Serial.print(count);
-    Serial.print(";");
-    Serial.print(pos0);
-    Serial.print(",");
-    Serial.print(pos1);
-    Serial.print(",");
-    Serial.println(*message);
-*/  
+
+  Serial.print(s);
+  Serial.print(";");
+  Serial.print(pos);
+  Serial.print (",");
+  Serial.print(count);
+  Serial.print(";");
+  Serial.print(pos0);
+  Serial.print(",");
+  Serial.print(pos1);
+  Serial.print(",");
+  Serial.println(*message);
+
   return pos1;
 }
 
+void send_PUBX_packet(char *p)
+{
+  uint8_t checksum = 0;
+  gps.print('$');
+  do {
+    char c = *p++;
+    if (c) {
+      checksum ^= (uint8_t)c;
+      gps.print(c);
+    }
+    else {
+      break;
+    }
+  }
+  while (1);
+  gps.print('*');
+  gps.println(checksum, HEX);
 
+}
+
+void configure_GP8013T(int rate)
+{
+  send_PUBX_packet("PUBX,40,GGA,0,5,0,5,0,0");
+  send_PUBX_packet("PUBX,40,VTG,0,5,0,5,0,0");
+  send_PUBX_packet("PUBX,40,GSV,0,5,0,5,0,0");
+  send_PUBX_packet("PUBX,40,RMC,0,1,0,1,0,0");
+  send_PUBX_packet("PUBX,40,GSV,0,5,0,5,0,0");
+  send_PUBX_packet("PUBX,40,GLL,0,5,0,5,0,0");
+  send_PUBX_packet("PUBX,40,GSA,0,5,0,5,0,0");
+}
 
