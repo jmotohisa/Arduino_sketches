@@ -22,9 +22,9 @@
 */
 
 /* Arudio - M096PBL
- *  A5 - SCL
- *  A4 - SDA
- v*/
+    A5 - SCL
+    A4 - SDA
+  v*/
 
 /* flow
   初期化ステップ1(シリアルポート、ソフトウェアシリアル、OLEDの初期化)
@@ -52,7 +52,7 @@
 
 */
 //#include <Wire.h>
-#include <SPI.h>
+//#include <SPI.h>
 #include <SD.h>
 #include <SoftwareSerial.h>
 #include "U8glib.h"
@@ -61,6 +61,8 @@
 #define TimeZone (9)
 #define SW_PIN_NO 6
 #define LED_PIN_NO 7
+#define BUFSIZE 90
+#define BUF2SIZE 12
 
 // initialize the library with the numbers of the interface pins
 SoftwareSerial gps(8, 9); // RX, TX
@@ -69,7 +71,6 @@ SoftwareSerial gps(8, 9); // RX, TX
 U8GLIB_SSD1306_128X64 u8g(U8G_I2C_OPT_NONE | U8G_I2C_OPT_DEV_0); // I2C / TWI
 
 File logFile;
-String utcDate, utcTime;
 
 int gpsHour, gpsMin, gpsSec;
 int gpsDay, gpsMonth, gpsYear;
@@ -117,7 +118,7 @@ void setup() {
   // initialize Software Serial and GPS
   gps.begin(9600); // ソフトウェアシリアルの初期化
   // configure output of GM-8013T
-  configure_GP8013T(60);
+  configure_GP8013T();
   Serial.println("GPS ready");
 
   delay(3000);
@@ -133,15 +134,14 @@ void setup() {
 
 void loop()
 {
-  char strbuf[90];
+  char strbuf[BUFSIZE];
+  char utcTime[10], utcDate[7];
   char latitude[11], longtude[12];
   char NS[2], WE[2];
-  String statGPS;
-  //  String utcTime, utcDate;
-  String s, s0;
-  int pos;
-  String localDate, localTime;
-  char localDate0[7], localTime0[7];
+  char statGPS[2];
+  char GPSStr[7];
+  char localTime0[7], localDate0[7];
+  int offset;
   int swStatus;
 
   swStatus = digitalRead(SW_PIN_NO);
@@ -170,36 +170,18 @@ void loop()
     } else {
       Serial.print(strbuf);
     }
-    s = String(strbuf);
-    pos = s.indexOf("$GNRMC");
-    if (pos == 0) { // if RMC line
-      //      strip_NMEA(s, &utcDate, pos, 9); strip date
-      //      Serial.print("utcDate:");
-      //      Serial.println(utcDate);
-      pos = strip_NMEA(s, &utcTime, pos, 1); // 1: utcTime
-      pos = strip_NMEA(s, &statGPS,     pos, 1); // 2: status
-      pos = strip_NMEA(s, &s0, pos, 1); // 3: latitude
-      s0.toCharArray(latitude, 11);
-      pos = strip_NMEA(s, &s0,     pos, 1); // 4: North/South
-      s0.toCharArray(NS, 2);
-      pos = strip_NMEA(s, &s0,     pos, 1); // 5: longitue
-      s0.toCharArray(longtude, 12);
-      pos = strip_NMEA(s, &s0,     pos, 1); // 6: West/East
-      s0.toCharArray(WE, 2);
-      pos = strip_NMEA(s, &utcDate, pos, 3); // 2: utcDate
+    offset = strip_NMEA(strbuf, GPSStr, 0, 1);
+    if (strcmp(GPSStr, "$GPRMC") == 0) { // if RMC line
+      offset = strip_NMEA(strbuf,utcTime, offset, 1); // utcTime
+      offset = strip_NMEA(strbuf,statGPS, offset, 1); // status
+      offset = strip_NMEA(strbuf,latitude,offset, 1); // latitue
+      offset = strip_NMEA(strbuf,NS,      offset, 1); // N/W
+      offset = strip_NMEA(strbuf,longtude,offset, 1); // longitude
+      offset = strip_NMEA(strbuf,WE,      offset, 1); // W/E
+      offset = strip_NMEA(strbuf,utcDate, offset, 3); // utcDate
 
-      //      long l_utcTime = utcTime.toInt();
-      //      long l_utcDate = utcDate.toInt();
-      //      gpsDate(l_utcTime);
-      //      gpsTime(l_utcDate);
-      //      UCTtoLT();
-
-      localTime = utcTime;
-      localDate = utcDate;
-      //        localTime=String(gpsHour)+String(gpsMin)+String(gpsSec);
-      //        localDate=String(gpsYear)+String(gpsMonth)+String(gpsMonth);
-      utcTime.toCharArray(localTime0, 7);
-      utcDate.toCharArray(localDate0, 7);
+      strncpy(localTime0, utcTime, 7);
+      strncpy(localDate0, utcDate, 7);
 
       u8g.firstPage();
       do {
@@ -207,7 +189,7 @@ void loop()
         byte ofs = u8g.drawStr(0, 18, localTime0);
         u8g.drawStr(ofs + 10, 18, localDate0);
 
-        if (statGPS.equals("A")) {
+        if (strchr(statGPS, 'A')) {
           u8g.drawStr(0, 36, NS);
           u8g.drawStr(10, 36, latitude);
           u8g.drawStr(0, 48, WE);
@@ -244,65 +226,60 @@ void recvStr(char *strbuf)
   strbuf[i] = '\0';  // \0: end of string
 }
 
-int strip_NMEA(String s, String *message, int pos, int count)
+int strip_NMEA(const char *orig, char *str, int offset, int count)
 {
-  int pos0, pos1, i;
-  i=0;
-  pos0 = pos;
-  pos1 = s.indexOf(",", pos0);
-  while (i < count) {
-    pos0 = pos1 + 1;
-    pos1 = s.indexOf(",", pos0);
-    i += 1;
+  char str0[BUFSIZE], s0[BUFSIZE], s1[BUF2SIZE];
+  int i, len;
+
+  for (i = 0; i < count; i++) {
+    strcpy(str0, orig + offset);
+    strcpy(s0, strchr(str0, ','));
+    len = strlen(str0) - strlen(s0);
+    strncpy(s1, str0, len); // len < BUF2SIZE +1 assumed
+    s1[len] = '\0';
+    offset += strlen(s1) + 1;
   }
-  *message = s.substring(pos0, pos1);
+  /* printf("%s ; %d ; %s\n",s1,len,str); */
+  strcpy(str, s1);
+
+  // for debug
   /*
-    Serial.print(s);
+    Serial.print(orig);
     Serial.print(";");
-    Serial.print(pos);
-    Serial.print (",");
-    Serial.print(count);
+    Serial.print(offset);
     Serial.print(";");
-    Serial.print(pos0);
-    Serial.print(",");
-    Serial.print(pos1);
-    Serial.print(",");
-    Serial.println(*message);
+    Serial.println(str);
   */
-  return pos1;
+  return offset;
 }
 
 bool checkSDFile()
 {
   // check log file
-  char strbuf[100];
-  int i, loopmax = 100, pos;
-  String s;
-  //  String utcTime, utcDate;
+  char strbuf[BUFSIZE];
+  char GPSStr[7];
+  char utcTime[10], utcDate[7];
+  int i, loopmax = 100, offset;
   logFileOpened = false;
 
   for (i = 0; i < loopmax; i++)
   {
     if (gps.available()) {  // if recived serial signal
       recvStr(strbuf);   // read serial data to string buffer
-      s = String(strbuf);
-      pos = s.indexOf("$GNRMC");
-      Serial.println(pos);
-      if (pos == 0) { // if RMC line
-//        Serial.println(s);
-        strip_NMEA(s, &utcDate, pos, 9); // strip date
-        Serial.println(utcDate);
-        if (utcDate.length() == 6 ) { // if date utcDate is valid
-          pos = strip_NMEA(s, &utcTime, pos, 1); // 1: utcTime
-          uint16_t l_utcTime = utcTime.toInt();
-          uint16_t l_utcDate = utcDate.toInt();
+      offset = strip_NMEA(strbuf, GPSStr, 0, 1);
+      if (strcmp(GPSStr, "$GPRMC") == 0) { // if RMC line
+        offset = strip_NMEA(strbuf, utcTime, offset, 1); // utcTime
+        offset = strip_NMEA(strbuf, utcDate, offset, 8); // utcDate
+//        Serial.println(utcDate);
+        if (strlen(utcDate) == 6 ) { // if date utcDate is valid
+          uint16_t l_utcTime = long(utcTime);
+          uint16_t l_utcDate = long(utcDate);
           gpsDate(l_utcTime);
           gpsTime(l_utcDate);
           // UCTtoLT();
-          utcDate = String("GP" + utcDate + ".txt");
-          utcDate.toCharArray(filename, 13);
+          sprintf(filename, "GP%s.txt", utcDate);
           logFile = SD.open(filename, FILE_WRITE);
-          if(!logFile) {
+          if (!logFile) {
             Serial.print("Cannot open log file: ");
             Serial.println(filename);
             return false;
@@ -341,11 +318,6 @@ bool checkSDFile()
   return false; // file could not created
 }
 
-bool configure_GP8013T(int timeout) {
-
-  return true;
-}
-
 // send NMEA command with checksum to gps (software serial)
 void send_nmea_command(const char *p)
 {
@@ -366,13 +338,40 @@ void send_nmea_command(const char *p)
   gps.println(checksum, HEX);
   //  gps.print("\n\r");
 }
+void send_PUBX_packet(const char *p)
+{
+  uint8_t checksum = 0;
+  gps.print('$');
+  do {
+    char c = *p++;
+    if (c) {
+      checksum ^= (uint8_t)c;
+      gps.print(c);
+    }
+    else {
+      break;
+    }
+  }
+  while (1);
+  gps.print('*');
+  gps.println(checksum, HEX);
+}
 
+void configure_GP8013T()
+{
+  send_PUBX_packet("PUBX,40,GGA,0,5,0,5,0,0");
+  send_PUBX_packet("PUBX,40,VTG,0,5,0,5,0,0");
+  send_PUBX_packet("PUBX,40,GSV,0,5,0,5,0,0");
+  send_PUBX_packet("PUBX,40,RMC,0,1,0,1,0,0");
+  send_PUBX_packet("PUBX,40,GSV,0,5,0,5,0,0");
+  send_PUBX_packet("PUBX,40,GLL,0,5,0,5,0,0");
+  send_PUBX_packet("PUBX,40,GSA,0,5,0,5,0,0");
+}
 void dateTime(uint16_t* date, uint16_t* time)
 {
-
   // GPSやRTCから日付と時間を取得
   // FAT_DATEマクロでフィールドを埋めて日付を返す
-  *date = FAT_DATE(gpsYear+2000, gpsMonth, gpsDay);
+  *date = FAT_DATE(gpsYear + 2000, gpsMonth, gpsDay);
 
   // FAT_TIMEマクロでフィールドを埋めて時間を返す
   *time = FAT_TIME(gpsHour, gpsMin, gpsSec);

@@ -97,7 +97,7 @@ void setup() {
   // initialize Software Serial and GT-720F
   gps.begin(9600); // ソフトウェアシリアルの初期化
   // configure output of GM-8013T
-//  configure_GP8013T(60);
+  configure_GP8013T();
   Serial.println("GPS ready");
 
   // initialize SD card
@@ -120,7 +120,6 @@ void loop()
   char GPSStr[7];
   char localTime0[10], localDate0[7];
   int offset;
-  int swStatus;
 
   if (gps.available()) {  // if recived serial signal
     recvStr(strbuf);   // read serial data to string buffer
@@ -143,20 +142,20 @@ void loop()
       u8g.firstPage();
       do {
         u8g.setFont(u8g_font_unifont);
-        strcpy(localTime0,utcTime);
-        strcpy(localDate0,utcDate);
+        strcpy(localTime0, utcTime);
+        strcpy(localDate0, utcDate);
 
         byte ofs = u8g.drawStr(0, 18, localTime0);
         u8g.drawStr(ofs + 10, 18, localDate0);
 
-        if (strchr(statGPS,'A')) {
+        if (strchr(statGPS, 'A')) {
           u8g.drawStr(0, 36, NS);
           u8g.drawStr(10, 36, latitude);
           u8g.drawStr(0, 48, WE);
           u8g.drawStr(10, 48, longtude);
         }
       } while (u8g.nextPage());
-
+/*
       Serial.print(localTime0);
       Serial.print(' ');
       Serial.println(localDate0);
@@ -164,7 +163,7 @@ void loop()
       Serial.println(latitude);
       Serial.print("longitude: ");
       Serial.println(longtude);
-
+*/
     }
   }
 }
@@ -203,16 +202,16 @@ int strip_NMEA(const char *orig, char *str, int offset, int count)
 
   // for debug
   /*
-  Serial.print(orig);
-  Serial.print(";");
-  Serial.print(offset);
-  Serial.print(";");
-  Serial.println(str);
-*/
+    Serial.print(orig);
+    Serial.print(";");
+    Serial.print(offset);
+    Serial.print(";");
+    Serial.println(str);
+  */
   return offset;
 }
 
-void send_PUBX_packet(char *p)
+void send_PUBX_packet(const char *p)
 {
   uint8_t checksum = 0;
   gps.print('$');
@@ -231,7 +230,7 @@ void send_PUBX_packet(char *p)
   gps.println(checksum, HEX);
 }
 
-void configure_GP8013T(int rate)
+void configure_GP8013T()
 {
   send_PUBX_packet("PUBX,40,GGA,0,5,0,5,0,0");
   send_PUBX_packet("PUBX,40,VTG,0,5,0,5,0,0");
