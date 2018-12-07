@@ -28,7 +28,7 @@
 #include "U8glib.h"
 
 #define SD_CHIP_SELECT 10
-#define BUFSIZE 90
+#define BUFSIZE 70
 #define BUF2SIZE 12
 
 // initialize the library with the numbers of the interface pins
@@ -41,6 +41,7 @@ File logFile;
 
 char filename[13];
 bool fileEnable = false;
+char s1[BUF2SIZE];
 
 bool checkSDFile()
 {
@@ -48,6 +49,7 @@ bool checkSDFile()
   for (unsigned int index = 0; index < 65535; index++) {
     char fileTmp[13];
     sprintf(fileTmp, "GPS%05d.TXT", index);
+    Serial.println(index);
     if (!SD.exists(fileTmp)) {
       logFile = SD.open(fileTmp, FILE_WRITE);
       Serial.println(fileTmp);
@@ -97,14 +99,17 @@ void setup() {
   // initialize Software Serial and GT-720F
   gps.begin(9600); // ソフトウェアシリアルの初期化
   // configure output of GM-8013T
-  configure_GP8013T();
+  // configure_GP8013T();
   Serial.println("GPS ready");
 
   // initialize SD card
   Serial.print("Initializing SD card...");
   pinMode(SD_CHIP_SELECT, OUTPUT);
   if (SD.begin(SD_CHIP_SELECT)) {
+    Serial.println("searching file");
     fileEnable = checkSDFile();
+  } else {
+    Serial.println("SD not enable");
   }
 
   delay(3000);
@@ -123,21 +128,30 @@ void loop()
 
   if (gps.available()) {  // if recived serial signal
     recvStr(strbuf);   // read serial data to string buffer
+    Serial.println(strbuf);
+
     if (logFile) {
-      logFile.println(strbuf);
+      logFile.print(strbuf);
       logFile.flush();
     }
 
-    offset = strip_NMEA(strbuf, GPSStr, 0, 1);
-
-    if (strcmp(GPSStr, "$GPRMC") == 0) { // if RMC line
-      offset = strip_NMEA(strbuf, utcTime, offset, 1); // utcTime
-      offset = strip_NMEA(strbuf, statGPS, offset, 1); // status
-      offset = strip_NMEA(strbuf, latitude, offset, 1); // latitue
-      offset = strip_NMEA(strbuf, NS, offset, 1); // N/W
-      offset = strip_NMEA(strbuf, longtude, offset, 1); // longitude
-      offset = strip_NMEA(strbuf, WE, offset, 1); // W/E
-      offset = strip_NMEA(strbuf, utcDate, offset, 3); // utcDate
+    offset = strip_NMEA(strbuf, 0, 1);
+    //      strcpy(GPSStr,s1);
+    if (strcmp(s1, "$GNRMC") == 0) { // if RMC line
+      offset = strip_NMEA(strbuf, offset, 1); // utcTime
+      strcpy(utcTime, s1);
+      offset = strip_NMEA(strbuf, offset, 1); // status
+      strcpy(statGPS, s1);
+      offset = strip_NMEA(strbuf, offset, 1); // latitue
+      strcpy(latitude, s1);
+      offset = strip_NMEA(strbuf, offset, 1); // N/W
+      strcpy(NS, s1);
+      offset = strip_NMEA(strbuf, offset, 1); // longitude
+      strcpy(longtude, s1);
+      offset = strip_NMEA(strbuf, offset, 1); // W/E
+      strcpy(WE, s1);
+      offset = strip_NMEA(strbuf, offset, 3); // utcDate
+      strcpy(utcDate, s1);
 
       u8g.firstPage();
       do {
@@ -155,7 +169,8 @@ void loop()
           u8g.drawStr(10, 48, longtude);
         }
       } while (u8g.nextPage());
-/*
+
+
       Serial.print(localTime0);
       Serial.print(' ');
       Serial.println(localDate0);
@@ -163,9 +178,10 @@ void loop()
       Serial.println(latitude);
       Serial.print("longitude: ");
       Serial.println(longtude);
-*/
+
     }
   }
+  logFile.close();
 }
 
 // recive string from GPS
@@ -184,21 +200,23 @@ void recvStr(char *strbuf)
   strbuf[i] = '\0';  // \0: end of string
 }
 
-int strip_NMEA(const char *orig, char *str, int offset, int count)
+int strip_NMEA(const char *orig, int offset, int count)
 {
-  char str0[BUFSIZE], s0[BUFSIZE], s1[BUF2SIZE];
+//  char str0[BUFSIZE], *s0;
+  char *str0,*s0;
   int i, len;
 
   for (i = 0; i < count; i++) {
-    strcpy(str0, orig + offset);
-    strcpy(s0, strchr(str0, ','));
+//    strcpy(str0, orig + offset);
+    str0=orig+offset;
+    s0 = strchr(str0, ',');
     len = strlen(str0) - strlen(s0);
     strncpy(s1, str0, len); // len < BUF2SIZE +1 assumed
     s1[len] = '\0';
     offset += strlen(s1) + 1;
   }
   /* printf("%s ; %d ; %s\n",s1,len,str); */
-  strcpy(str, s1);
+  //  strcpy(str, s1);
 
   // for debug
   /*
@@ -206,8 +224,9 @@ int strip_NMEA(const char *orig, char *str, int offset, int count)
     Serial.print(";");
     Serial.print(offset);
     Serial.print(";");
-    Serial.println(str);
-  */
+    Serial.println(s1);
+    */
+  
   return offset;
 }
 
