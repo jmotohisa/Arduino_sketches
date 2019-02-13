@@ -55,7 +55,8 @@
 //#include <SPI.h>
 #include <SD.h>
 #include <SoftwareSerial.h>
-#include "U8glib.h"
+#include "SSD1306Ascii.h"
+#include "SSD1306AsciiWire.h"
 
 #define SD_CHIP_SELECT 10
 #define TimeZone (9)
@@ -68,7 +69,14 @@
 SoftwareSerial gps(8, 9); // RX, TX
 
 // setup u8g object
-U8GLIB_SSD1306_128X64 u8g(U8G_I2C_OPT_NONE | U8G_I2C_OPT_DEV_0); // I2C / TWI
+//U8GLIB_SSD1306_128X64 u8g(U8G_I2C_OPT_NONE | U8G_I2C_OPT_DEV_0); // I2C / TWI
+// 0X3C+SA0 - 0x3C or 0x3D
+#define I2C_ADDRESS 0x3C
+
+// Define proper RST_PIN if required.
+#define RST_PIN -1
+
+SSD1306AsciiWire oled;
 
 File logFile;
 
@@ -94,26 +102,17 @@ void setup() {
   Serial.println("Serial Ready");
 
   // initialize OLED Display M096P4BL
-  // flip screen, if required
-  // u8g.setRot180();
+  Wire.begin();
+  Wire.setClock(400000L);
+#if RST_PIN >= 0
+  oled.begin(&Adafruit128x64, I2C_ADDRESS, RST_PIN);
+#else // RST_PIN >= 0
+  oled.begin(&Adafruit128x64, I2C_ADDRESS);
+#endif // RST_PIN >= 0
+  // Call oled.setI2cClock(frequency) to change from the default frequency.
 
-  // set SPI backup if required
-  //u8g.setHardwareBackup(u8g_backup_avr_spi);
-
-  // assign default color value
-  if ( u8g.getMode() == U8G_MODE_R3G3B2 ) {
-    u8g.setColorIndex(255);     // white
-  }
-  else if ( u8g.getMode() == U8G_MODE_GRAY2BIT ) {
-    u8g.setColorIndex(3);         // max intensity
-  }
-  else if ( u8g.getMode() == U8G_MODE_BW ) {
-    u8g.setColorIndex(1);         // pixel on
-  }
-  else if ( u8g.getMode() == U8G_MODE_HICOLOR ) {
-    u8g.setHiColorByRGB(255, 255, 255);
-  }
-  u8g.setFont(u8g_font_helvR10r);  //1.6KByte/17x22
+  oled.setFont(X11fixed7x14);
+  oled.clear();
 
   // initialize Software Serial and GPS
   gps.begin(9600); // ソフトウェアシリアルの初期化
@@ -124,10 +123,14 @@ void setup() {
   delay(3000);
   // initialize SD card
   Serial.println("Initializing SD card...");
+  oled.print("Init SD card.");
   pinMode(SD_CHIP_SELECT, OUTPUT);
   if (SD.begin(SD_CHIP_SELECT)) {
     fileEnable = checkSDFile();
   }
+
+  oled.setCursor(0,0);
+  oled.clearToEOL();
 
   runMode = 0;
 }
@@ -187,26 +190,25 @@ void loop()
       strcpy(WE, s1);
       offset = strip_NMEA(strbuf, offset, 3); // utcDate
       strcpy(utcDate, s1);
-/*
+
       strncpy(localTime0, utcTime, 6);
       localTime0[6] = '/0';
       strncpy(localDate0, utcDate, 6);
       localDate0[6] = '/0';
-*/
-      utcTime[6]='\0';
-      u8g.firstPage();
-      do {
-        u8g.setFont(u8g_font_unifont);
-        byte ofs = u8g.drawStr(0, 18, utcTime);
-        u8g.drawStr(ofs + 10, 18, utcDate);
+
+      oled.setCursor(0,0);
+      oled.print(localTime0);
+      oled.setCursor(48,0);
+      oled.print(localDate0);
 
         if (strchr(statGPS, 'A')) {
-          u8g.drawStr(0, 36, NS);
-          u8g.drawStr(10, 36, latitude);
-          u8g.drawStr(0, 48, WE);
-          u8g.drawStr(10, 48, longtude);
+          oled.setCursor(0,2);
+          oled.print(NS);
+          oled.print(latitude);
+          oled.setCursor(0,4);
+          oled.print(WE);
+          oled.print(longtude);
         }
-      } while (u8g.nextPage());
       /*
             Serial.print(localTime0);
             Serial.print(' ');
@@ -296,6 +298,9 @@ bool checkSDFile()
           if (!logFile) {
             Serial.print("Cannot open log file: ");
             Serial.println(filename);
+            oled.setCursor(0,6);
+            oled.print("SD not enable");
+
             return false;
           }
           Serial.print("Log file opend:");
