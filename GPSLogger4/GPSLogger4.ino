@@ -52,11 +52,12 @@
 
 */
 //#include <Wire.h>
-//#include <SPI.h>
+#include <SPI.h>
 #include <SD.h>
 #include <SoftwareSerial.h>
 #include "SSD1306Ascii.h"
-#include "SSD1306AsciiWire.h"
+//#include "SSD1306AsciiWire.h"
+#include "SSD1306AsciiAvrI2c.h"
 
 #define SD_CHIP_SELECT 10
 #define TimeZone (9)
@@ -76,7 +77,8 @@ SoftwareSerial gps(8, 9); // RX, TX
 // Define proper RST_PIN if required.
 #define RST_PIN -1
 
-SSD1306AsciiWire oled;
+//SSD1306AsciiWire oled;
+SSD1306AsciiAvrI2c oled;
 
 File logFile;
 
@@ -102,8 +104,8 @@ void setup() {
   Serial.println("Serial Ready");
 
   // initialize OLED Display M096P4BL
-  Wire.begin();
-  Wire.setClock(400000L);
+//  Wire.begin();
+//  Wire.setClock(400000L);
 #if RST_PIN >= 0
   oled.begin(&Adafruit128x64, I2C_ADDRESS, RST_PIN);
 #else // RST_PIN >= 0
@@ -112,22 +114,34 @@ void setup() {
   // Call oled.setI2cClock(frequency) to change from the default frequency.
 
   oled.setFont(X11fixed7x14);
+//  oled.setFont(System5x7);
   oled.clear();
 
   // initialize Software Serial and GPS
   gps.begin(9600); // ソフトウェアシリアルの初期化
   // configure output of GM - 8013T
   configure_GP8013T();
-  Serial.println("GPS ready");
+//  Serial.println("GPS ready");
+  oled.println("GPS ready");
 
   delay(3000);
-  // initialize SD card
-  Serial.println("Initializing SD card...");
-  oled.print("Init SD card.");
+  
+// initialize SD card
+//  Serial.println("Initializing SD card...");
+//  oled.setCursor(0,2);
+  oled.clear();
+  oled.println("Init SD card");
   pinMode(SD_CHIP_SELECT, OUTPUT);
   if (SD.begin(SD_CHIP_SELECT)) {
     fileEnable = checkSDFile();
+  } else {
+//    Serial.println("SD not inserted.");
+    oled.setCursor(0,6);
+    oled.clearToEOL();
+    oled.println("SD begin failed.");
+    fileEnable=false;
   }
+  delay(3000);
 
   oled.setCursor(0,0);
   oled.clearToEOL();
@@ -143,7 +157,7 @@ void loop()
   char NS[2], WE[2];
   char statGPS[2];
   char GPSStr[7];
-  char localTime0[7], localDate0[7];
+  char localTime0[9], localDate0[9];
   int offset;
   int swStatus;
 
@@ -159,10 +173,26 @@ void loop()
   } else if (runMode == 0 && swStatus == HIGH) { // logging turn on
     runMode = 1;
     Serial.println("logging started...");
-    digitalWrite(LED_PIN_NO, HIGH);
-    if (logFileOpened == false && fileEnable == true) {
-      logFile = SD.open(filename, FILE_WRITE);
-      logFileOpened = true;
+    if (logFileOpened == false) {
+      if(!fileEnable) {
+        fileEnable = checkSDFile();
+      }
+      if(fileEnable) {
+        logFile = SD.open(filename, FILE_WRITE);
+        if(!logFile) {
+          Serial.println("cannot open logfile");
+          oled.setCursor(0,6);
+          oled.print("logfile not open");
+        } else {
+          oled.clearToEOL();
+          logFileOpened = true;
+          digitalWrite(LED_PIN_NO, HIGH);
+        }
+      } else {
+        Serial.println("SD not insered");
+        oled.setCursor(0,6);
+        oled.println("SD not inserted");
+      }
     }
   }
 
@@ -190,34 +220,61 @@ void loop()
       strcpy(WE, s1);
       offset = strip_NMEA(strbuf, offset, 3); // utcDate
       strcpy(utcDate, s1);
-
+/*
       strncpy(localTime0, utcTime, 6);
       localTime0[6] = '/0';
       strncpy(localDate0, utcDate, 6);
       localDate0[6] = '/0';
+*/
+ //     uint16_t l_utcTime = atol(utcTime);
+ //     uint16_t l_utcDate = atol(utcDate);
+      gpsDate(utcDate);
+      gpsTime(utcTime);
+      UCTtoLT();
+      sprintf(localDate0, "%02d/%02d/%02d", gpsYear,gpsMonth,gpsDay);
+      sprintf(localTime0, "%02d:%02d:%02d", gpsHour,gpsMin,gpsSec);
 
       oled.setCursor(0,0);
       oled.print(localTime0);
-      oled.setCursor(48,0);
+      oled.setCursor(64,0);
       oled.print(localDate0);
 
-        if (strchr(statGPS, 'A')) {
-          oled.setCursor(0,2);
-          oled.print(NS);
-          oled.print(latitude);
-          oled.setCursor(0,4);
-          oled.print(WE);
-          oled.print(longtude);
-        }
-      /*
-            Serial.print(localTime0);
-            Serial.print(' ');
-            Serial.println(localDate0);
+      if (strchr(statGPS, 'A')) {
+        oled.setCursor(0,2);
+        oled.print(NS);
+        oled.print(latitude);
+        oled.setCursor(0,4);
+        oled.print(WE);
+        oled.print(longtude);
+      } else {
+        oled.setCursor(0,2);
+        oled.print("GPS invalid");
+      }
+      
+//      Serial.println(l_utcTime);
+//      Serial.print(' ');
+//      Serial.println(l_utcDate);
+//      Serial.print(gpsYear);
+//     Serial.print(gpsMonth);
+//      Serial.print(gpsDay);
+//      Serial.print(' ');
+//      Serial.print(gpsHour);
+//      Serial.print(gpsMin);
+//      Serial.print(gpsSec);
+      
+      Serial.print(utcTime);
+      Serial.print(' ');
+      Serial.println(localTime0);
+      Serial.print(utcDate);
+      Serial.print(' ');
+      Serial.println(localDate0);
+            /*
             Serial.print("latitude: ");
             Serial.println(latitude);
             Serial.print("longitude: ");
             Serial.println(longtude);
-      */
+            */
+      
     }
   }
 }
@@ -287,31 +344,39 @@ bool checkSDFile()
         strcpy(utcDate, s1);
         //        Serial.println(utcDate);
         if (strlen(utcDate) == 6 ) { // if date utcDate is valid
-          uint16_t l_utcTime = atol(utcTime);
-          uint16_t l_utcDate = atol(utcDate);
-          gpsDate(l_utcDate);
-          gpsTime(l_utcTime);
-          // UCTtoLT();
-          // sprintf(filename, "GP%2d%2d%2d.txt", gpsYear,gpsMonth,gpsDate);
-          sprintf(filename, "GP%s.txt", utcDate);
+//          uint16_t l_utcTime = atol(utcTime);
+//          uint16_t l_utcDate = atol(utcDate);
+          gpsDate(utcDate);
+          gpsTime(utcTime);
+          UCTtoLT();
+          sprintf(filename, "GP%02d%02d%02d.txt", gpsYear,gpsMonth,gpsDay);
+//          sprintf(filename, "GP%s.txt", utcDate);
+          Serial.print("Opening log file: ");
+          Serial.println(filename);
+          oled.println("Opening log file");
           logFile = SD.open(filename, FILE_WRITE);
           if (!logFile) {
-            Serial.print("Cannot open log file: ");
+            Serial.print("Can't open log file: ");
             Serial.println(filename);
             oled.setCursor(0,6);
-            oled.print("SD not enable");
-
+            oled.print("Can't open logfile");
             return false;
           }
-          Serial.print("Log file opend:");
-          Serial.println(filename);
+//          Serial.print("Log file opened:");
+//          Serial.println(filename);
+          oled.clear();
+          oled.setCursor(0,0);
+          oled.print("Log file opened.");
+          oled.setCursor(0,6);
+          oled.clearToEOL();
+          oled.print(filename);
           logFile.close();
           SdFile::dateTimeCallback( &dateTime );
           return true;
         }
       }
     }
-    delay(500);
+    delay(1000);
   }
   Serial.println("Can't open logfile");
   return false; // file could not created
@@ -378,11 +443,40 @@ void dateTime(uint16_t* date, uint16_t* time)
 }
 
 // UTC -> (gpsHour, gpsMin, gpsSec)
-void gpsTime(uint16_t UTC)
+void gpsTime0(uint16_t UTC)
 {
   gpsHour = int(UTC / 10000);
   gpsMin = int(UTC % 10000 / 100);
   gpsSec = UTC % 100;
+}
+// Date ->(gpsYear,gpsMonth,gpsYear)
+void gpsDate0(uint16_t dateRead)
+{
+  gpsDay = int(dateRead / 10000);
+  gpsMonth = int(dateRead % 10000 / 100);
+  gpsYear = dateRead % 100; //last 2 digits, e.g. 2013-> 13
+}
+
+void gpsTime(const char *utcTime)
+{
+  char s[3];
+  mysubstr(s,utcTime,0,2);
+  gpsHour=atoi(s);
+  mysubstr(s,utcTime,2,2);
+  gpsMin=atoi(s);
+  mysubstr(s,utcTime,4,2);
+  gpsSec=atoi(s);
+}
+
+void gpsDate(const char *utcDate)
+{
+  char s[3];
+  mysubstr(s,utcDate,4,2);
+  gpsYear = atoi(s);
+  mysubstr(s,utcDate,2,2);
+  gpsMonth = atoi(s);
+  mysubstr(s,utcDate,0,2);
+  gpsDay = atoi(s);
 }
 /*
   // Latitude/Longitude
@@ -392,17 +486,11 @@ void gpsTime(uint16_t UTC)
   gpsLong = int(long1/100) + (long1%100)/60.0 + float(long2)/10000.0/60.0;
   }
 */
-// Date ->(gpsYear,gpsMonth,gpsYear)
-void gpsDate(uint16_t dateRead)
-{
-  gpsDay = int(dateRead / 10000);
-  gpsMonth = int(dateRead % 10000 / 100);
-  gpsYear = dateRead % 100; //last 2 digits, e.g. 2013-> 13
-}
 
 void UCTtoLT()
 {
-  int leap = (gpsYear % 4) * 4 / gpsYear - (gpsYear % 100) * 100 / gpsYear + (gpsYear % 400) * 400 / gpsYear ;
+//  int leap = (gpsYear % 4) * 4 / gpsYear - (gpsYear % 100) * 100 / gpsYear + (gpsYear % 400) * 400 / gpsYear ;
+  int leap = (gpsYear / 4) * 4 / gpsYear ;
   int DaysAMonth[12] = {31, 28 + leap, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
   gpsHour += TimeZone;
   if (gpsHour < 0)
@@ -437,4 +525,14 @@ void UCTtoLT()
       }
     }
   }
+}
+
+int mysubstr(char *t, const char *s, int pos, int len )
+{
+    if( pos < 0 || len < 0 || len > strlen(s) )
+        return -1;
+    for( s += pos; *s != '\0' && len > 0; len-- )
+        *t++ = *s++;
+    *t = '\0';
+    return 0;
 }
