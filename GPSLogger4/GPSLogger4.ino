@@ -1,4 +1,4 @@
-// GPS Logger version 2
+// GPS Logger version 3.0
 
 /* with
    u-Blox GM-8013T
@@ -85,6 +85,7 @@ File logFile;
 int gpsHour, gpsMin, gpsSec;
 int gpsDay, gpsMonth, gpsYear;
 
+char strbuf[BUFSIZE];
 char s1[BUF2SIZE];
 char filename[13];
 bool fileEnable;
@@ -128,7 +129,8 @@ void setup() {
   delay(3000);
   
 // initialize SD card
-//  Serial.println("Initializing SD card...");
+  filename[0]='\0';
+  Serial.println("Initializing SD card...");
   oled.setCursor(0,0);
   oled.clear();
   oled.print("Init SD card");
@@ -154,7 +156,6 @@ void setup() {
 void loop()
 {
   int swStatus;
-  char strbuf[BUFSIZE];
 
   swStatus = digitalRead(SW_PIN_NO);
   if (runMode == 1 && swStatus == LOW) {
@@ -180,13 +181,16 @@ void loop()
         Serial.println("Can't open logfile");
         oled.setCursor(0,6);
         oled.print("Can't open logfile");
+      } else {
+        logFileOpened=true;
+        digitalWrite(LED_PIN_NO, HIGH);
       }
     }
   }
-  doLogging(strbuf);
+  doLogging();
 }
 
-void doLogging(char *strbuf)
+void doLogging()
 {
   char utcTime[10], utcDate[7];
   char latitude[11], longtude[12];
@@ -197,7 +201,7 @@ void doLogging(char *strbuf)
   int offset;
 
   if (gps.available()) {  // if recived serial signal
-    recvStr(strbuf);   // read serial data to string buffer
+    recvStr();   // read serial data to string buffer
     if (logFileOpened == true) {
       logFile.print(strbuf);
     } else {
@@ -269,18 +273,13 @@ void doLogging(char *strbuf)
             Serial.println(latitude);
             Serial.print("longitude: ");
             Serial.println(longtude);
-            */
-    
+            */    
     }
   }
-  
 }
 
-
-
-
 // recieve string from GPS
-void recvStr(char *strbuf)
+void recvStr()
 {
   int i = 0;
   char c;
@@ -328,11 +327,23 @@ bool checkSDFile()
   // check log file
   int i, loopmax = 100;
 
+  oled.setCursor(0,6);
   for (i = 0; i < loopmax; i++) {
     if(setFileName()) 
       break;
+    Serial.print(i);
+    if(i%10==0)
+    {
+      oled.setCursor(0,6);
+      oled.clearToEOL();
+      oled.print(i/10);
+      oled.print(':');
+    }
+    oled.print(i%10);
     delay(500);
   }
+  if(strlen(filename)==0) 
+    strcpy(filename,"GPtemp.txt");
   Serial.print("Opening log file: ");
   Serial.println(filename);
   oled.println("Opening log file");
@@ -516,15 +527,16 @@ int mysubstr(char *t, const char *s, int pos, int len )
 
 bool setFileName()
 {
-  char strbuf[BUFSIZE];
   char GPSStr[7];
   char utcTime[10], utcDate[7];
   int offset;
 
+  Serial.println("Seeking filename");
   if (gps.available()) {  // if recived serial signal
-    recvStr(strbuf);   // read serial data to string buffer
+    recvStr();   // read serial data to string buffer
     offset = strip_NMEA(strbuf, 0, 1);
     if (strcmp(s1, "$GNRMC") == 0) { // if RMC line
+      Serial.println(strbuf);
       offset = strip_NMEA(strbuf, offset, 1); // utcTime
       strcpy(utcTime, s1);
       offset = strip_NMEA(strbuf, offset, 8); // utcDate
