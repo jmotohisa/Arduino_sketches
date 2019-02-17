@@ -51,6 +51,9 @@
   loop end
 
 */
+
+//#define ENABLE_SERIAL
+
 //#include <Wire.h>
 #include <SPI.h>
 #include <SD.h>
@@ -97,12 +100,14 @@ void setup() {
   pinMode(LED_PIN_NO, OUTPUT) ;      // LEDに接続
   pinMode(SW_PIN_NO, INPUT_PULLUP ) ; // SW に接続し内部プルアップに設定
 
+#ifdef ENABLE_SERIAL
   // Open serial communications and wait for port to open:
   Serial.begin(9600);
   while (!Serial) {
     ; // wait for serial port to connect. Needed for native USB port only
   }
   Serial.println("Serial Ready");
+#endif
 
   // initialize OLED Display M096P4BL
 //  Wire.begin();
@@ -130,7 +135,9 @@ void setup() {
   
 // initialize SD card
   filename[0]='\0';
+#ifdef ENABLE_SERIAL
   Serial.println("Initializing SD card...");
+#endif
   oled.setCursor(0,0);
   oled.clear();
   oled.print("Init SD card");
@@ -160,7 +167,9 @@ void loop()
   swStatus = digitalRead(SW_PIN_NO);
   if (runMode == 1 && swStatus == LOW) {
     runMode = 0; // logging turn off
+#ifdef ENABLE_SERIAL
     Serial.println("logging off");
+#endif
     digitalWrite(LED_PIN_NO, LOW);
     if (logFileOpened == true) {
       logFile.close();
@@ -168,7 +177,9 @@ void loop()
     }
   } else if (runMode == 0 && swStatus == HIGH) { // logging turn on
     runMode = 1;
+#ifdef ENABLE_SERIAL
     Serial.println("logging started...");
+#endif
     if (logFileOpened == false) {
       if(!fileEnable) {
         fileEnable = checkSDFile();
@@ -178,7 +189,9 @@ void loop()
       }
       
       if(!logFile || !fileEnable) {
+#ifdef ENABLE_SERIAL
         Serial.println("Can't open logfile");
+#endif
         oled.setCursor(0,6);
         oled.print("Can't open logfile");
       } else {
@@ -205,7 +218,9 @@ void doLogging()
     if (logFileOpened == true) {
       logFile.print(strbuf);
     } else {
+#ifdef ENABLE_SERIAL
       Serial.print(strbuf);
+#endif
     }
 
     // Display date/time/latitude/longitude
@@ -331,7 +346,9 @@ bool checkSDFile()
   for (i = 0; i < loopmax; i++) {
     if(setFileName()) 
       break;
+#ifdef ENABLE_SERIAL
     Serial.print(i);
+#endif
     if(i%10==0)
     {
       oled.setCursor(0,6);
@@ -344,15 +361,19 @@ bool checkSDFile()
   }
   if(strlen(filename)==0) 
     strcpy(filename,"GPtemp.txt");
+#ifdef ENABLE_SERIAL
   Serial.print("Opening log file: ");
   Serial.println(filename);
+#endif
   oled.println("Opening log file");
 
 // open log file
   logFile = SD.open(filename, FILE_WRITE);
   if (!logFile) {
+#ifdef ENABLE_SERIAL
     Serial.print("Can't open log file: ");
     Serial.println(filename);
+#endif
     oled.setCursor(0,6);
     oled.print("Can't open logfile");
     return false;
@@ -531,12 +552,14 @@ bool setFileName()
   char utcTime[10], utcDate[7];
   int offset;
 
+#ifdef ENABLE_SERIAL
   Serial.println("Seeking filename");
+#endif
   if (gps.available()) {  // if recived serial signal
     recvStr();   // read serial data to string buffer
     offset = strip_NMEA(strbuf, 0, 1);
     if (strcmp(s1, "$GNRMC") == 0) { // if RMC line
-      Serial.println(strbuf);
+//      Serial.println(strbuf);
       offset = strip_NMEA(strbuf, offset, 1); // utcTime
       strcpy(utcTime, s1);
       offset = strip_NMEA(strbuf, offset, 8); // utcDate
