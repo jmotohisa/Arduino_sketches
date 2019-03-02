@@ -1,4 +1,4 @@
-// GPS Logger version 3.0
+// GPS Logger version 3.1
 
 /* with
    u-Blox GM-8013T
@@ -58,6 +58,7 @@
 #include <SPI.h>
 #include <SD.h>
 #include <SoftwareSerial.h>
+#include <MsTimer2.h>
 #include "SSD1306Ascii.h"
 //#include "SSD1306AsciiWire.h"
 #include "SSD1306AsciiAvrI2c.h"
@@ -156,6 +157,10 @@ void setup() {
 
   oled.setCursor(0,0);
   oled.clearToEOL();
+
+  // enable timer2
+  MsTimer2::set(60000, flushSD);
+  MsTimer2::start();
 
   runMode = 0;
 }
@@ -575,4 +580,14 @@ bool setFileName()
     }
   }
   return false;
+}
+
+void flushSD()
+{
+  if (logFileOpened == true) {
+    digitalWrite(LED_PIN_NO, LOW);
+    logFile.flush();
+    delay(500);
+    digitalWrite(LED_PIN_NO, HIGH);
+  }
 }
