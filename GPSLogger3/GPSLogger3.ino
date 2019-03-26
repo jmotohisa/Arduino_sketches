@@ -26,8 +26,8 @@
 #include <SD.h>
 #include <SoftwareSerial.h>
 
-#include "SSD1306Ascii.h"
-#include "SSD1306AsciiWire.h"
+#include <SSD1306Ascii.h>
+#include <SSD1306AsciiWire.h>
 //#include "U8glib.h"
 
 #define SD_CHIP_SELECT 10
@@ -54,6 +54,9 @@ char filename[13];
 bool fileEnable = false;
 char s1[BUF2SIZE];
 
+void recvStr(char *);
+int strip_NMEA(const char *, int , int );
+  
 bool checkSDFile()
 {
   // open log file
