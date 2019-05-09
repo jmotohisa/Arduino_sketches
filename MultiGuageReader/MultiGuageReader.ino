@@ -15,6 +15,8 @@
 
 */
 
+// #define ENABLE_SERIAL
+
 #include <SevenSeg.h>
 #include <SPI.h>
 
@@ -43,14 +45,15 @@ void setup() {
   SPI.setClockDivider(SPI_CLOCK_DIV16);
 
 // Debug
+#ifdef ENABLE_SERIAL
   Serial.begin(9600);
-
+#endif
 }  
 
 void loop() {
  // put your main code here, to run repeatedly:
  
- int dig,exp2;
+ int dig,dig2,exp2;
  float exponent;
  String s;
   
@@ -59,21 +62,29 @@ void loop() {
  m_data = SPI.transfer(0x00);
  l_data = SPI.transfer(0x00);
  digitalWrite(CS,HIGH);
+#ifdef ENABLE_SERIAL
+ Serial.print(m_data,HEX);
+ Serial.println(l_data,HEX);
+#endif
 
  /*  vout = (m_data*2^8+l_data)/2^16*2*5 (wihout divider); */
- vout=(m_data*0.039062+l_data*1.5259e-4)*2;
+ vout=(int(m_data)*0.039062+int(l_data)*1.5259e-4);
  dig=(int) vout;
- exponent = pow(10,1-vout+dig);
+ dig2=11-vout;
+ exponent=((vout-dig)+0.1)/0.11;
+// exponent = pow(10,vout-dig);
  exp2=exponent*100;
  s=String(exp2);
- s.concat(" -");
- s.concat(String(dig));
+ s.concat("E-");
+ s.concat(String(dig2));
 // Debug
+#ifdef ENABLE_SERIAL
  Serial.println(vout);
  Serial.println(s);
+#endif
  
 // disp.write(vout);
- 
+// delay(500);
   disp.write(s);
   delay(500);
 }
@@ -82,4 +93,3 @@ ISR(TIMER1_COMPA_vect)
 {
   disp.interruptAction();
 }
-
