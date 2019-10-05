@@ -67,7 +67,7 @@
 #define TimeZone (9)
 #define SW_PIN_NO 6
 #define LED_PIN_NO 7
-#define BUFSIZE 90
+#define BUFSIZE 100
 #define BUF2SIZE 12
 
 // initialize the library with the numbers of the interface pins
@@ -116,14 +116,15 @@ void setup() {
   oled.clear();
   oled.setCursor(0,0);
 
-  // initialize Software Serial and GPS
+  // initialize Hardware Serial and GPS
+  delay(3000);
   Serial.begin(9600); // Hardware Serial
   // configure output of GM - 8013T
   configure_GP8013T();
   
   oled.print("GPS ready");
 
-  delay(3000);
+  delay(2000);
   
 // initialize SD card
   filename[0]='\0';
@@ -140,7 +141,7 @@ void setup() {
     fileEnable=false;
   }
   logFileOpened=false;
-  delay(3000);
+  delay(2000);
 
   oled.setCursor(0,0);
   oled.clearToEOL();
@@ -197,11 +198,13 @@ void doLogging()
   int offset;
 
   if (Serial.available()) {  // if recived serial signal
+//    digitalWrite(LED_PIN_NO,HIGH);
     recvStr();   // read serial data to string buffer
     if (logFileOpened == true) {
       logFile.print(strbuf);
     } else {
   }
+//    digitalWrite(LED_PIN_NO,LOW);
 
     // Display date/time/latitude/longitude
     offset = strip_NMEA(strbuf, 0, 1);
@@ -264,6 +267,10 @@ void recvStr()
   }
   i++;
   strbuf[i] = '\0';  // \0: end of string
+//  if(digitalRead(SW_PIN_NO)){
+    oled.setCursor(0,6);
+    oled.print(strbuf);
+//  }
 }
 
 // get info from NMEA sentence
@@ -487,6 +494,7 @@ bool setFileName()
   int offset;
 
   if (Serial.available()) {  // if recived serial signal
+//    digitalWrite(LED_PIN_NO,HIGH);
     recvStr();   // read serial data to string buffer
     offset = strip_NMEA(strbuf, 0, 1);
     if (strcmp(s1, "$GNRMC") == 0) { // if RMC line
@@ -502,6 +510,7 @@ bool setFileName()
         return true;
       }
     }
+//    digitalWrite(LED_PIN_NO,LOW);
   }
   return false;
 }
@@ -511,6 +520,9 @@ void flushSD()
   if (logFileOpened == true) {
     digitalWrite(LED_PIN_NO, LOW);
     logFile.flush();
+    oled.setCursor(0,6);
+    oled.clearToEOL();
+    oled.print(filename);
     delay(500);
     digitalWrite(LED_PIN_NO, HIGH);
   }
