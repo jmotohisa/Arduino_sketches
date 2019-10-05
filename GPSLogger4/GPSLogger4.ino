@@ -1,4 +1,4 @@
-// GPS Logger version 3.1
+// GPS Logger version 4.0
 
 /* with
    u-Blox GM-8013T
@@ -16,9 +16,9 @@
  ** CS - depends on your SD card shield or module. ->10
 */
 
-/* Arduino - GM-8013T (with Software Serial), gps(8,9)
-    RX: 8 - 3 (TTL output)
-    TX: 9 - 4 (TTL input)
+/* Arduino - GM-8013T (with Hardware Serial), //software serial was gps(8(RX),9(TX))
+    RX: 0 - 3 (TTL output)
+    TX: 1 - 4 (TTL input)
 */
 
 /* Arudio - M096PBL
@@ -52,12 +52,12 @@
 
 */
 
-//#define ENABLE_SERIAL
+//#define USE_SOFTWARE_SERIAL_MONITOR
 
 //#include <Wire.h>
 #include <SPI.h>
 #include <SD.h>
-#include <SoftwareSerial.h>
+//#include <SoftwareSerial.h>
 #include <MsTimer2.h>
 #include "SSD1306Ascii.h"
 //#include "SSD1306AsciiWire.h"
@@ -71,7 +71,7 @@
 #define BUF2SIZE 12
 
 // initialize the library with the numbers of the interface pins
-SoftwareSerial gps(8, 9); // RX, TX
+//SoftwareSerial gps(8, 9); // RX, TX
 
 // setup u8g object
 //U8GLIB_SSD1306_128X64 u8g(U8G_I2C_OPT_NONE | U8G_I2C_OPT_DEV_0); // I2C / TWI
@@ -101,15 +101,6 @@ void setup() {
   pinMode(LED_PIN_NO, OUTPUT) ;      // LEDに接続
   pinMode(SW_PIN_NO, INPUT_PULLUP ) ; // SW に接続し内部プルアップに設定
 
-#ifdef ENABLE_SERIAL
-  // Open serial communications and wait for port to open:
-  Serial.begin(9600);
-  while (!Serial) {
-    ; // wait for serial port to connect. Needed for native USB port only
-  }
-  Serial.println("Serial Ready");
-#endif
-
   // initialize OLED Display M096P4BL
 //  Wire.begin();
 //  Wire.setClock(400000L);
@@ -126,19 +117,16 @@ void setup() {
   oled.setCursor(0,0);
 
   // initialize Software Serial and GPS
-  gps.begin(9600); // ソフトウェアシリアルの初期化
+  Serial.begin(9600); // Hardware Serial
   // configure output of GM - 8013T
   configure_GP8013T();
-//  Serial.println("GPS ready");
+  
   oled.print("GPS ready");
 
   delay(3000);
   
 // initialize SD card
   filename[0]='\0';
-#ifdef ENABLE_SERIAL
-  Serial.println("Initializing SD card...");
-#endif
   oled.setCursor(0,0);
   oled.clear();
   oled.print("Init SD card");
@@ -146,7 +134,6 @@ void setup() {
   if (SD.begin(SD_CHIP_SELECT)) {
     fileEnable = checkSDFile();
   } else {
-//    Serial.println("SD begin failed.");
     oled.setCursor(0,6);
 //    oled.clearToEOL();
     oled.println("SD begin failed.");
@@ -172,9 +159,6 @@ void loop()
   swStatus = digitalRead(SW_PIN_NO);
   if (runMode == 1 && swStatus == LOW) {
     runMode = 0; // logging turn off
-#ifdef ENABLE_SERIAL
-    Serial.println("logging off");
-#endif
     digitalWrite(LED_PIN_NO, LOW);
     if (logFileOpened == true) {
       logFile.close();
@@ -182,9 +166,6 @@ void loop()
     }
   } else if (runMode == 0 && swStatus == HIGH) { // logging turn on
     runMode = 1;
-#ifdef ENABLE_SERIAL
-    Serial.println("logging started...");
-#endif
     if (logFileOpened == false) {
       if(!fileEnable) {
         fileEnable = checkSDFile();
@@ -194,9 +175,6 @@ void loop()
       }
       
       if(!logFile || !fileEnable) {
-#ifdef ENABLE_SERIAL
-        Serial.println("Can't open logfile");
-#endif
         oled.setCursor(0,6);
         oled.print("Can't open logfile");
       } else {
@@ -218,15 +196,12 @@ void doLogging()
   char localTime0[9], localDate0[9];
   int offset;
 
-  if (gps.available()) {  // if recived serial signal
+  if (Serial.available()) {  // if recived serial signal
     recvStr();   // read serial data to string buffer
     if (logFileOpened == true) {
       logFile.print(strbuf);
     } else {
-#ifdef ENABLE_SERIAL
-      Serial.print(strbuf);
-#endif
-    }
+  }
 
     // Display date/time/latitude/longitude
     offset = strip_NMEA(strbuf, 0, 1);
@@ -270,30 +245,6 @@ void doLogging()
         oled.print("GPS invalid");
       }
 
-      // for debug
-//      Serial.print(' ');
-//      Serial.print(gpsYear);
-//     Serial.print(gpsMonth);
-//      Serial.print(gpsDay);
-//      Serial.print(' ');
-//      Serial.print(gpsHour);
-//      Serial.print(gpsMin);
-//      Serial.print(gpsSec);
-
-    /*
-      Serial.print(utcTime);
-      Serial.print(' ');
-      Serial.println(localTime0);
-      Serial.print(utcDate);
-      Serial.print(' ');
-      Serial.println(localDate0);
-      */
-            /*
-            Serial.print("latitude: ");
-            Serial.println(latitude);
-            Serial.print("longitude: ");
-            Serial.println(longtude);
-            */    
     }
   }
 }
@@ -304,8 +255,8 @@ void recvStr()
   int i = 0;
   char c;
   while (1) {
-    if (gps.available()) {
-      c = gps.read();
+    if (Serial.available()) {
+      c = Serial.read();
       strbuf[i] = c;
       if (c == '\n') break;
       i++;
@@ -330,15 +281,6 @@ int strip_NMEA(const char *orig, int offset, int count)
     offset += strlen(s1) + 1;
   }
 
-  // for debug
-  /*
-    Serial.print(orig);
-    Serial.print(";");
-    Serial.print(offset);
-    Serial.print(";");
-    Serial.println(s1);
-  */
-
   return offset;
 }
 
@@ -351,9 +293,6 @@ bool checkSDFile()
   for (i = 0; i < loopmax; i++) {
     if(setFileName()) 
       break;
-#ifdef ENABLE_SERIAL
-    Serial.print(i);
-#endif
     if(i%10==0)
     {
       oled.setCursor(0,6);
@@ -366,25 +305,15 @@ bool checkSDFile()
   }
   if(strlen(filename)==0) 
     strcpy(filename,"GPtemp.txt");
-#ifdef ENABLE_SERIAL
-  Serial.print("Opening log file: ");
-  Serial.println(filename);
-#endif
   oled.println("Opening log file");
 
 // open log file
   logFile = SD.open(filename, FILE_WRITE);
   if (!logFile) {
-#ifdef ENABLE_SERIAL
-    Serial.print("Can't open log file: ");
-    Serial.println(filename);
-#endif
     oled.setCursor(0,6);
     oled.print("Can't open logfile");
     return false;
   }
-//  Serial.print("Log file opened:");
-//          Serial.println(filename);
   oled.clear();
   oled.setCursor(0,0);
   oled.print("Log file opened.");
@@ -396,43 +325,43 @@ bool checkSDFile()
   return true;
 }
 
-// send NMEA command with checksum to gps (software serial)
+// send NMEA command with checksum to gps (hardware serial)
 void send_nmea_command(const char *p)
 {
   uint8_t checksum = 0;
-  gps.print('$');
+  Serial.print('$');
   do {
     char c = *p++;
     if (c) {
       checksum ^= (uint8_t)c;
-      gps.print(c);
+      Serial.print(c);
     }
     else {
       break;
     }
   }
   while (1);
-  gps.print('*');
-  gps.println(checksum, HEX);
-  //  gps.print("\n\r");
+  Serial.print('*');
+  Serial.println(checksum, HEX);
+  //  Serial.print("\n\r");
 }
 void send_PUBX_packet(const char *p)
 {
   uint8_t checksum = 0;
-  gps.print('$');
+  Serial.print('$');
   do {
     char c = *p++;
     if (c) {
       checksum ^= (uint8_t)c;
-      gps.print(c);
+      Serial.print(c);
     }
     else {
       break;
     }
   }
   while (1);
-  gps.print('*');
-  gps.println(checksum, HEX);
+  Serial.print('*');
+  Serial.println(checksum, HEX);
 }
 
 // $GNRMC, $GNVTG, $GNGGA, $GPGSV, $GLGSV, $GNGLL, $GNGSA
@@ -557,19 +486,14 @@ bool setFileName()
   char utcTime[10], utcDate[7];
   int offset;
 
-#ifdef ENABLE_SERIAL
-  Serial.println("Seeking filename");
-#endif
-  if (gps.available()) {  // if recived serial signal
+  if (Serial.available()) {  // if recived serial signal
     recvStr();   // read serial data to string buffer
     offset = strip_NMEA(strbuf, 0, 1);
     if (strcmp(s1, "$GNRMC") == 0) { // if RMC line
-//      Serial.println(strbuf);
       offset = strip_NMEA(strbuf, offset, 1); // utcTime
       strcpy(utcTime, s1);
       offset = strip_NMEA(strbuf, offset, 8); // utcDate
       strcpy(utcDate, s1);
-      //        Serial.println(utcDate);
       if (strlen(utcDate) == 6 ) { // if date utcDate is valid
         gpsDate(utcDate);
         gpsTime(utcTime);
