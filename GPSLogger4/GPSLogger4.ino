@@ -16,15 +16,15 @@
  ** CS - depends on your SD card shield or module. ->10
 */
 
-/* Arduino - GM-8013T (with Hardware Serial), //software serial was gps(8(RX),9(TX))
-    RX: 0 - 3 (TTL output)
-    TX: 1 - 4 (TTL input)
+/* Arduino - GM-8013T (with software serial)
+    RX: 8 - 3 (TTL output)
+    TX: 9 - 4 (TTL input)
 */
 
 /* Arudio - M096PBL
     A5 - SCL
     A4 - SDA
-  v*/
+  */
 
 /* flow
   初期化ステップ1(シリアルポート、ソフトウェアシリアル、OLEDの初期化)
@@ -57,8 +57,8 @@
 //#include <Wire.h>
 #include <SPI.h>
 #include <SD.h>
-//#include <SoftwareSerial.h>
-#include <MsTimer2.h>
+#include <SoftwareSerial.h>
+//#include <MsTimer2.h>
 #include "SSD1306Ascii.h"
 //#include "SSD1306AsciiWire.h"
 #include "SSD1306AsciiAvrI2c.h"
@@ -71,7 +71,7 @@
 #define BUF2SIZE 12
 
 // initialize the library with the numbers of the interface pins
-//SoftwareSerial gps(8, 9); // RX, TX
+SoftwareSerial gps(8, 9); // RX, TX
 
 // setup u8g object
 //U8GLIB_SSD1306_128X64 u8g(U8G_I2C_OPT_NONE | U8G_I2C_OPT_DEV_0); // I2C / TWI
@@ -92,6 +92,7 @@ int gpsDay, gpsMonth, gpsYear;
 char strbuf[BUFSIZE];
 char s1[BUF2SIZE];
 char filename[13];
+char substr[7];
 bool fileEnable;
 bool runMode;
 bool logFileOpened;
@@ -117,14 +118,14 @@ void setup() {
   oled.setCursor(0,0);
 
   // initialize Hardware Serial and GPS
-  delay(3000);
-  Serial.begin(9600); // Hardware Serial
+  delay(1000);
+  gps.begin(9600); // Hardware Serial
   // configure output of GM - 8013T
   configure_GP8013T();
   
   oled.print("GPS ready");
 
-  delay(2000);
+  delay(1000);
   
 // initialize SD card
   filename[0]='\0';
@@ -147,8 +148,8 @@ void setup() {
   oled.clearToEOL();
 
   // enable timer2
-  MsTimer2::set(60000, flushSD);
-  MsTimer2::start();
+//  MsTimer2::set(60000, flushSD);
+//  MsTimer2::start();
 
   runMode = 0;
 }
@@ -197,11 +198,12 @@ void doLogging()
   char localTime0[9], localDate0[9];
   int offset;
 
-  if (Serial.available()) {  // if recived serial signal
+  if (gps.available()) {  // if recived serial signal
 //    digitalWrite(LED_PIN_NO,HIGH);
     recvStr();   // read serial data to string buffer
     if (logFileOpened == true) {
       logFile.print(strbuf);
+      logFile.flush();
     } else {
   }
 //    digitalWrite(LED_PIN_NO,LOW);
@@ -258,8 +260,8 @@ void recvStr()
   int i = 0;
   char c;
   while (1) {
-    if (Serial.available()) {
-      c = Serial.read();
+    if (gps.available()) {
+      c = gps.read();
       strbuf[i] = c;
       if (c == '\n') break;
       i++;
@@ -269,7 +271,9 @@ void recvStr()
   strbuf[i] = '\0';  // \0: end of string
 //  if(digitalRead(SW_PIN_NO)){
     oled.setCursor(0,6);
-    oled.print(strbuf);
+    strncpy(substr,strbuf,6);
+    substr[6]='\0';
+    oled.print(substr);
 //  }
 }
 
@@ -336,50 +340,60 @@ bool checkSDFile()
 void send_nmea_command(const char *p)
 {
   uint8_t checksum = 0;
-  Serial.print('$');
+  gps.print('$');
   do {
     char c = *p++;
     if (c) {
       checksum ^= (uint8_t)c;
-      Serial.print(c);
+      gps.print(c);
     }
     else {
       break;
     }
   }
   while (1);
-  Serial.print('*');
-  Serial.println(checksum, HEX);
-  //  Serial.print("\n\r");
+  gps.print('*');
+  gps.println(checksum, HEX);
+  //  gps.print("\n\r");
 }
 void send_PUBX_packet(const char *p)
 {
   uint8_t checksum = 0;
-  Serial.print('$');
+  gps.print('$');
   do {
     char c = *p++;
     if (c) {
       checksum ^= (uint8_t)c;
-      Serial.print(c);
+      gps.print(c);
     }
     else {
       break;
     }
   }
   while (1);
-  Serial.print('*');
-  Serial.println(checksum, HEX);
+  gps.print('*');
+  gps.println(checksum, HEX);
 }
 
 // $GNRMC, $GNVTG, $GNGGA, $GPGSV, $GLGSV, $GNGLL, $GNGSA
 void configure_GP8013T()
 {
-  send_PUBX_packet("PUBX,40,RMC,0,5,0,5,0,0");
-  send_PUBX_packet("PUBX,40,VTG,0,5,0,5,0,0");
-  send_PUBX_packet("PUBX,40,GGA,0,5,0,5,0,0");
-  send_PUBX_packet("PUBX,40,GSV,0,5,0,5,0,0");
-  send_PUBX_packet("PUBX,40,GLL,0,5,0,5,0,0");
-  send_PUBX_packet("PUBX,40,GSA,0,5,0,5,0,0");
+  // set NMEA sentence output rate
+  // "$PUBX,40", followed by
+  // msgID, 
+  // output rate on DDC
+  // output rate on USART1
+  // output rate on USART2
+  // output rate on USB
+  // output rate on SPI
+  // 0 (reserved)
+  // and "*" + checksum + CRLF
+  send_PUBX_packet("PUBX,40,RMC,0,5,0,0,0,0");
+  send_PUBX_packet("PUBX,40,VTG,0,5,0,0,0,0");
+  send_PUBX_packet("PUBX,40,GGA,0,5,0,0,0,0");
+  send_PUBX_packet("PUBX,40,GSV,0,5,0,0,0,0");
+  send_PUBX_packet("PUBX,40,GLL,0,5,0,0,0,0");
+  send_PUBX_packet("PUBX,40,GSA,0,5,0,0,0,0");
 }
 
 void dateTime(uint16_t* date, uint16_t* time)
@@ -493,7 +507,7 @@ bool setFileName()
   char utcTime[10], utcDate[7];
   int offset;
 
-  if (Serial.available()) {  // if recived serial signal
+  if (gps.available()) {  // if recived serial signal
 //    digitalWrite(LED_PIN_NO,HIGH);
     recvStr();   // read serial data to string buffer
     offset = strip_NMEA(strbuf, 0, 1);

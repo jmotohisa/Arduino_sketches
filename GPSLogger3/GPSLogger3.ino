@@ -22,6 +22,11 @@
     5: input (TTL) - 9 (TX) - 6: output (TTL) - 8 (RX)
 */
 
+/* Arudio - M096PBL
+    A5 - SCL
+    A4 - SDA
+  */
+
 #include <SPI.h>
 #include <SD.h>
 #include <SoftwareSerial.h>
