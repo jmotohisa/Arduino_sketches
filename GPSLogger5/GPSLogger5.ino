@@ -1,35 +1,69 @@
-// GPS Logger version 2
+// GPS Logger version 5.0
 
 /* with
-  GT-720F
+  ESP8266 ESP-12E
+   u-Blox 
    SDcard
    M096P4BL
 */
 
-/* note
-  Arudino-SDcard
-  The circuit:
-   SD card attached to SPI bus as follows:
- ** MOSI - pin 11 on Arduino Uno/Duemilanove/Diecimila
- ** MISO - pin 12 on Arduino Uno/Duemilanove/Diecimila
- ** CLK - pin 13 on Arduino Uno/Duemilanove/Diecimila
- ** CS - depends on your SD card shield or module. ->10
+/* Circuit Connction
+ *  
+ *
+ SD Card  | ESP8266  | Label
+-------- | -------- | -------
+MOSI     | GPIO 13  | D7
+MISO     | GPIO 12  | D6
+CLK      | GPIO 14  | D5
+CS       | GPIO 15  | D8
+
+M096PBL  | ESP8266  | Label
+SCL      | GPIO 5   | D1
+SDA      | GPIO 4   | D2
+
+GT-902PMGG | ESP8266  | Label
+ TTL output | GPIO 3 |  RX
+TTL input  | GPIO 1 |  TX
+
+LED      | GPIO 2   | (D4)
+
+  */
+
+/* flow
+  初期化ステップ1(シリアルポート、ソフトウェアシリアル、OLEDの初期化)
+  初期化ステップ2(GPSの設定：データの受信間隔・GPSより出力/ログするセンテンスの設定)
+  初期化ステップ3(SD・ファイルの初期化)
+  データを受信し、GPRMCもしくはGNRMCセンテンスのチェック→有効なRMCセンテンスならば日付を得る
+  日付、および既存ファイルと重複しないようファイル名を決定
+  ファイル作成日を指定していったんファイルをopen→close
+
+  loop
+  データ受信
+  LED点灯
+  ファイルが有効ならば
+    ファイルをopen
+    データをファイルに記録(シリアルに出力)
+    ファイルをclose
+    LED消灯
+  GPRMCもしくはGNRMCセンテンスのチェック、RMCセンテンスならば
+    有効なRMCセンテンスならば
+      validのindicator をOLEDに表示
+      緯度・経度・日付・時刻を得て、OLEDに情報を表示
+    でなければ
+      invalid dataであることの表示
+  loop end
+
 */
 
-/* Arduino-GPS GT-720F (with Software Serial)
-    RX: 8 - 6 (TTL output)
-    TX: 9 - 5 (TTL input)
-*/
+//#define USE_SOFTWARE_SERIAL_MONITOR
 
-/* Arudio - M096PBL
-    A5 - SCL
-    A4 - SDA
-  v*/
-
-#include <Wire.h>
+//#include <Wire.h>
 #include <SPI.h>
 #include <SD.h>
-#include <SoftwareSerial.h>
+//#include <SoftwareSerial.h>
+#include <MsTimer2.h>
+#include "SSD1306Ascii.h"
+//#include "SSD1306AsciiWire.h"
 #include "SSD1306AsciiAvrI2c.h"
 
 #define SD_CHIP_SELECT 10
@@ -38,13 +72,13 @@
 #define LED_PIN_NO 7
 #define BUFSIZE 100
 #define BUF2SIZE 12
-#define MESSAGESIZE 16
 
 // initialize the library with the numbers of the interface pins
-SoftwareSerial gps(8, 9); // RX, TX
+//SoftwareSerial gps(8, 9); // RX, TX
 
 // setup u8g object
 //U8GLIB_SSD1306_128X64 u8g(U8G_I2C_OPT_NONE | U8G_I2C_OPT_DEV_0); // I2C / TWI
+// 0X3C+SA0 - 0x3C or 0x3D
 #define I2C_ADDRESS 0x3C
 
 // Define proper RST_PIN if required.
@@ -53,82 +87,56 @@ SoftwareSerial gps(8, 9); // RX, TX
 //SSD1306AsciiWire oled;
 SSD1306AsciiAvrI2c oled;
 
-// NMEA string to analyze latitude, logitude, date and time
-#define NMEA_RMC_STRING "$GPRMC"
-
 File logFile;
-
-char filename[13];
 
 int gpsHour, gpsMin, gpsSec;
 int gpsDay, gpsMonth, gpsYear;
 
 char strbuf[BUFSIZE];
 char s1[BUF2SIZE];
+char filename[13];
 char substr[7];
 bool fileEnable;
 bool runMode;
 bool logFileOpened;
-bool fileOpened = false;
-
-byte message[MESSAGESIZE];
 
 void setup() {
-  // Open serial communications and wait for port to open:
-//  Serial.begin(9600);
-//  while (!Serial) {
-    ; // wait for serial port to connect. Needed for native USB port only
-//  }
-//  Serial.println("Ready");
+
+// turn off wifi
+  WiFi.disconnect();
+  WiFi.mode(WIFI_OFF);
+  WiFi.forceSleepBegin();
 
   pinMode(LED_PIN_NO, OUTPUT) ;      // LEDに接続
   pinMode(SW_PIN_NO, INPUT_PULLUP ) ; // SW に接続し内部プルアップに設定
 
   // initialize OLED Display M096P4BL
-  // flip screen, if required
-  // u8g.setRot180();
+//  Wire.begin();
+//  Wire.setClock(400000L);
 #if RST_PIN >= 0
   oled.begin(&Adafruit128x64, I2C_ADDRESS, RST_PIN);
 #else // RST_PIN >= 0
   oled.begin(&Adafruit128x64, I2C_ADDRESS);
 #endif // RST_PIN >= 0
+  // Call oled.setI2cClock(frequency) to change from the default frequency.
 
-  // set SPI backup if required
-  //u8g.setHardwareBackup(u8g_backup_avr_spi);
   oled.setFont(X11fixed7x14);
 //  oled.setFont(System5x7);
   oled.clear();
   oled.setCursor(0,0);
 
- 
-  // initialize Software Serial and GT-720F
-  gps.begin(9600); // ソフトウェアシリアルの初期化
+  // initialize Hardware Serial and GPS
+//  Serial.begin(115200);
+  delay(1000);
+  Serial.begin(9600); // Hardware Serial
+  // configure output of GM - 8013T
+  configure_GP8013T();
+  
+  oled.print("GPS ready");
 
-// configure output of GT-720F
-  // 0xA0, 0xA1, 0x00, 0x09, 0x08, followed by GGA/GSA/GSV/GLL/RMC/VTG/ZDA intervals, attributes and checksum, CR, LF
-
-  // GGA/GSA/GSV/GLL/RMC messages, 1second
-  /* byte message[]={0xA0, 0xA1, 0x00, 0x09, 0x08, 0x01, 0x01, 0x01, 0x01, 0x01, 0x00, 0x00, 0x00, 0x09, 0x0D, 0x0A}; */
-  message[]={0x08, 0x01, 0x01, 0x01, 0x01, 0x01, 0x00, 0x00, 0x00};
-  // GGA and RMC message only, 1second
-//    byte message[]={0xA0, 0xA1, 0x00, 0x09, 0x08, 0x01, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x08, 0x0D, 0x0A};
-  // GGA and RMC message only, 2second
-  //  byte message[]={0xA0, 0xA1, 0x00, 0x09, 0x08, 0x02, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, 0x08, 0x0D, 0x0A};
-  // GGA/GSV/RMC message, 2second
-//    byte message[]={0xA0, 0xA1, 0x00, 0x09, 0x08, 0x02, 0x00, 0x02, 0x00, 0x02, 0x00, 0x00, 0x00, 0x0A, 0x0D, 0x0A};
-  // GGA/GSV/RMC message only, 5second
-//    byte message[]={0xA0, 0xA1, 0x00, 0x09, 0x08, 0x05, 0x00, 0x00, 0x00, 0x05, 0x00, 0x00, 0x00, 0x08, 0x0D, 0x0A};
-     // GGA/GSA/GSV/GLL/RMC messages, 5second
-//    byte message[]={0xA0, 0xA1, 0x00, 0x09, 0x08, 0x05, 0x05, 0x05, 0x05, 0x05, 0x00, 0x00, 0x00, 0x0D, 0x0D, 0x0A};
-   /* gps.write(message,sizeof(message)); */
-  send_message(message,9);
-//   Serial.println("GPS ready");
-
-  // set DATE
-	   message[]={0x64, 0x15, 0x01, 0x13, 0xDD, 0x0A, 0x0D, 0x01};
-  send_message(message,8);
-
-  // initialize SD card
+  delay(1000);
+  
+// initialize SD card
   filename[0]='\0';
   oled.setCursor(0,0);
   oled.clear();
@@ -143,19 +151,22 @@ void setup() {
     fileEnable=false;
   }
   logFileOpened=false;
-  delay(3000);
-  
+  delay(2000);
+
   oled.setCursor(0,0);
   oled.clearToEOL();
 
-  runMode = 0;
+  // enable timer2
+  MsTimer2::set(60000, flushSD);
+  MsTimer2::start();
 
+  runMode = 0;
 }
 
 void loop()
 {
   int swStatus;
-  
+
   swStatus = digitalRead(SW_PIN_NO);
   if (runMode == 1 && swStatus == LOW) {
     runMode = 0; // logging turn off
@@ -196,13 +207,12 @@ void doLogging()
   char localTime0[9], localDate0[9];
   int offset;
 
-  if (gps.available()) {  // if recived serial signal
+  if (Serial.available()) {  // if recived serial signal
 //    digitalWrite(LED_PIN_NO,HIGH);
     recvStr();   // read serial data to string buffer
-//    Serial.println(strbuf);
     if (logFileOpened == true) {
       logFile.print(strbuf);
-      logFile.flush();
+//      logFile.flush();
     } else {
   }
 //    digitalWrite(LED_PIN_NO,LOW);
@@ -210,8 +220,7 @@ void doLogging()
     // Display date/time/latitude/longitude
     offset = strip_NMEA(strbuf, 0, 1);
     //      strcpy(GPSStr,s1);
-    if (strcmp(s1, NMEA_RMC_STRING) == 0) { // if RMC line
-//      Serial.println(strbuf);
+    if (strcmp(s1, "$GNRMC") == 0) { // if RMC line
       offset = strip_NMEA(strbuf, offset, 1); // utcTime
       strcpy(utcTime, s1);
       offset = strip_NMEA(strbuf, offset, 1); // status
@@ -226,9 +235,6 @@ void doLogging()
       strcpy(WE, s1);
       offset = strip_NMEA(strbuf, offset, 3); // utcDate
       strcpy(utcDate, s1);
-      oled.setCursor(70,6);
-      oled.clearToEOL();
-      oled.print(utcDate);
 
       gpsDate(utcDate);
       gpsTime(utcTime);
@@ -257,24 +263,27 @@ void doLogging()
   }
 }
 
+// recieve string from GPS
 void recvStr()
 {
   int i = 0;
   char c;
   while (1) {
-    if (gps.available()) {
-      c = gps.read();
+    if (Serial.available()) {
+      c = Serial.read();
       strbuf[i] = c;
       if (c == '\n') break;
       i++;
     }
   }
+  i++;
   strbuf[i] = '\0';  // \0: end of string
-  
-  oled.setCursor(0,6);
-  strncpy(substr,strbuf,6);
-  substr[6]='\0';
-  oled.print(substr);
+//  if(digitalRead(SW_PIN_NO)){
+    oled.setCursor(0,6);
+    strncpy(substr,strbuf,6);
+    substr[6]='\0';
+    oled.print(substr);
+//  }
 }
 
 // get info from NMEA sentence
@@ -297,68 +306,105 @@ int strip_NMEA(const char *orig, int offset, int count)
 
 bool checkSDFile()
 {
-  // open log file
-  for (unsigned int index = 0; index < 65535; index++) {
-    char fileTmp[13];
-    sprintf(fileTmp, "GPS%05d.TXT", index);
-    //        lcd.print(fileTmp);
-    if (!SD.exists(fileTmp)) {
-      logFile = SD.open(fileTmp, FILE_WRITE);
-//      Serial.println(fileTmp);
-      if (logFile) {
-        //                lcd.print("OK");
-//        Serial.println("Log file opened");
-        strcpy(filename, fileTmp);
-        logFile.close();
-        return true;
-      }
-      //            lcd.setCursor(0,1);
-      //            lcd.print("Can't open file");
-//      Serial.println("Can't open logfile");
+  // check log file
+  int i, loopmax = 100;
+
+  oled.setCursor(0,6);
+  for (i = 0; i < loopmax; i++) {
+    if(setFileName()) 
       break;
+    if(i%10==0)
+    {
+      oled.setCursor(0,6);
+      oled.clearToEOL();
+      oled.print(i/10);
+      oled.print(':');
     }
+    oled.print(i%10);
+    delay(500);
   }
-  return false;
+  if(strlen(filename)==0) 
+    strcpy(filename,"GPtemp.txt");
+  oled.println("Opening log file");
+
+// open log file
+  logFile = SD.open(filename, FILE_WRITE);
+  if (!logFile) {
+    oled.setCursor(0,6);
+    oled.print("Can't open logfile");
+    return false;
+  }
+  oled.clear();
+  oled.setCursor(0,0);
+  oled.print("Log file opened.");
+  oled.setCursor(0,6);
+  oled.clearToEOL();
+  oled.print(filename);
+  logFile.close();
+  SdFile::dateTimeCallback( &dateTime );
+  return true;
 }
 
 // send NMEA command with checksum to gps (hardware serial)
 void send_nmea_command(const char *p)
 {
   uint8_t checksum = 0;
-  gps.print('$');
+  Serial.print('$');
   do {
     char c = *p++;
     if (c) {
       checksum ^= (uint8_t)c;
-      gps.print(c);
+      Serial.print(c);
     }
     else {
       break;
     }
   }
   while (1);
-  gps.print('*');
-  gps.println(checksum, HEX);
-  //  gps.print("\n\r");
+  Serial.print('*');
+  Serial.println(checksum, HEX);
+  //  Serial.print("\n\r");
 }
 
-void send_message(const char *p,int len)
+void send_PUBX_packet(const char *p)
 {
-  int i;
   uint8_t checksum = 0;
-  gps.print(0xA0);
-  gps.pring(0xA1);
-  gps.print(len);
-  for(i=0;i<len;i++)
+  Serial.print('$');
+  do {
     char c = *p++;
     if (c) {
       checksum ^= (uint8_t)c;
-      gps.print(c);
+      Serial.print(c);
     }
-  gps.println(checksum, HEX);
+    else {
+      break;
+    }
+  }
+  while (1);
+  Serial.print('*');
+  Serial.println(checksum, HEX);
 }
 
-
+// $GNRMC, $GNVTG, $GNGGA, $GPGSV, $GLGSV, $GNGLL, $GNGSA
+void configure_GP8013T()
+{
+  // set NMEA sentence output rate
+  // "$PUBX,40", followed by
+  // msgID, 
+  // output rate on DDC
+  // output rate on USART1
+  // output rate on USART2
+  // output rate on USB
+  // output rate on SPI
+  // 0 (reserved)
+  // and "*" + checksum + CRLF
+  send_PUBX_packet("PUBX,40,RMC,0,5,0,0,0,0");
+  send_PUBX_packet("PUBX,40,VTG,0,5,0,0,0,0");
+  send_PUBX_packet("PUBX,40,GGA,0,5,0,0,0,0");
+  send_PUBX_packet("PUBX,40,GSV,0,5,0,0,0,0");
+  send_PUBX_packet("PUBX,40,GLL,0,5,0,0,0,0");
+  send_PUBX_packet("PUBX,40,GSA,0,5,0,0,0,0");
+}
 
 void dateTime(uint16_t* date, uint16_t* time)
 {
@@ -471,11 +517,11 @@ bool setFileName()
   char utcTime[10], utcDate[7];
   int offset;
 
-  if (gps.available()) {  // if recived serial signal
+  if (Serial.available()) {  // if recived serial signal
 //    digitalWrite(LED_PIN_NO,HIGH);
     recvStr();   // read serial data to string buffer
     offset = strip_NMEA(strbuf, 0, 1);
-    if (strcmp(s1, NMEA_RMC_STRING) == 0) { // if RMC line
+    if (strcmp(s1, "$GNRMC") == 0) { // if RMC line
       offset = strip_NMEA(strbuf, offset, 1); // utcTime
       strcpy(utcTime, s1);
       offset = strip_NMEA(strbuf, offset, 8); // utcDate
@@ -491,4 +537,17 @@ bool setFileName()
 //    digitalWrite(LED_PIN_NO,LOW);
   }
   return false;
+}
+
+void flushSD()
+{
+  if (logFileOpened == true) {
+    digitalWrite(LED_PIN_NO, LOW);
+    logFile.flush();
+    oled.setCursor(0,6);
+    oled.clearToEOL();
+    oled.print(filename);
+    delay(500);
+    digitalWrite(LED_PIN_NO, HIGH);
+  }
 }

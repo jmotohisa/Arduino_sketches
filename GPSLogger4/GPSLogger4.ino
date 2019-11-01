@@ -356,6 +356,7 @@ void send_nmea_command(const char *p)
   gps.println(checksum, HEX);
   //  gps.print("\n\r");
 }
+
 void send_PUBX_packet(const char *p)
 {
   uint8_t checksum = 0;
