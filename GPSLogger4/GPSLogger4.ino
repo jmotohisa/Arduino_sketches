@@ -194,7 +194,7 @@ void doLogging()
   char latitude[11], longtude[12];
   char NS[2], WE[2];
   char statGPS[2];
-  char GPSStr[7];
+ // char GPSStr[7];
   char localTime0[9], localDate0[9];
   int offset;
 
@@ -278,7 +278,8 @@ void recvStr()
 }
 
 // get info from NMEA sentence
-int strip_NMEA(const char *orig, int offset, int count)
+//int strip_NMEA(const char *orig, int offset, int count)
+int strip_NMEA(char *orig, int offset, int count)
 {
   char *str0, *s0;
   int i, len;
@@ -492,9 +493,10 @@ void UCTtoLT()
   }
 }
 
-int mysubstr(char *t, const char *s, int pos, int len )
+int mysubstr(char *t, const char *s, int pos, unsigned int len )
 {
-    if( pos < 0 || len < 0 || len > strlen(s) )
+//    if( pos < 0 || len < 0 || len > strlen(s) )
+    if( pos < 0 || len > strlen(s) )
         return -1;
     for( s += pos; *s != '\0' && len > 0; len-- )
         *t++ = *s++;
@@ -504,7 +506,7 @@ int mysubstr(char *t, const char *s, int pos, int len )
 
 bool setFileName()
 {
-  char GPSStr[7];
+//  char GPSStr[7];
   char utcTime[10], utcDate[7];
   int offset;
 
