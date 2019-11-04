@@ -10,7 +10,9 @@
 #include <ESP8266WiFi.h>
 
 #include <Wire.h>  // Only needed for Arduino 1.6.5 and earlier
-#include "SSD1306Wire.h" // legacy include: `#include "SSD1306.h"`
+//#include "SSD1306Wire.h" // legacy include: `#include "SSD1306.h"`
+#include "SSD1306Ascii.h"
+#include "SSD1306AsciiWire.h"
 
 #include <SPI.h>
 #include "SdFat.h"
@@ -94,13 +96,17 @@ LED      | GPIO 2   | (D4)
 // initialize the library with the numbers of the interface pins
 //SoftwareSerial gps(8, 9); // RX, TX
 
+// SSD1306Wire display(OLED_I2C_ADDRESS, OLED_SDA, OLED_SCL);
+// Define proper RST_PIN if required.
+#define RST_PIN -1
+
 // Initialize the OLED display using i2c
-SSD1306Wire display(OLED_I2C_ADDRESS, OLED_SDA, OLED_SCL);
+SSD1306AsciiWire oled;
 
 // Ticker (timer)
 Ticker ticker ;
 
-File logFile;
+SdFile logFile;
 
 int gpsHour, gpsMin, gpsSec;
 int gpsDay, gpsMonth, gpsYear;
@@ -125,42 +131,56 @@ void setup() {
 //  pinMode(SW_PIN_NO, INPUT_PULLUP ) ; // SW に接続し内部プルアップに設定
     digitalWrite(LED_BUILTIN, HIGH); // turn off (active LOW)
 
+  Wire.begin();
+  Wire.setClock(400000L);
 // initialize OLED Display M096P4BL
-  display.init();
-  display.flipScreenVertically();
-  display.setFont(SansSerif_plain_16);
-//  display.setFont(X11fixed7x14);
-  display.clear();
+#if RST_PIN >= 0
+  oled.begin(&Adafruit128x64, OLED_I2C_ADDRESS, RST_PIN);
+#else // RST_PIN >= 0
+  oled.begin(&Adafruit128x64, OLED_I2C_ADDRESS);
+#endif // RST_PIN >= 0
+  // Call oled.setI2cClock(frequency) to change from the default frequency.
 
-  // initialize Hardware Serial and GPS
-//  Serial.begin(115200);
+  oled.setFont(X11fixed7x14);
+//  oled.setFont(System5x7);
+  oled.clear();
+  oled.setCursor(0,0);
+  oled.print("Initalizing...");
+
+  // initialize Hardware Serial forGPS
+  //  Serial.begin(115200);
   Serial.begin(9600);
-  delay(2000);
-//  Serial.begin(9600); // Hardware Serial
+  delay(5000);
+  //  Serial.begin(9600); // Hardware Serial
   // configure output of GM - 8013T
   configure_GP8013T();
   
-  display.drawString(0,0,"GPS ready");
-  display.display();
+  oled.setCursor(0,2);
+  oled.print("GPS ready");
   
   delay(1000);
   
 // initialize SD card
   filename[0]='\0';
-  display.drawString(0,32,"Init SD card");
-  display.display();
+  oled.setCursor(0,0);
+  oled.clear();
+  oled.print("Init SD card");
   pinMode(SD_CHIP_SELECT, OUTPUT);
-  if (SD.begin(SD_CHIP_SELECT)) {
-    fileEnable = checkSDFile();
+  if (!SD.begin(SD_CHIP_SELECT,SD_SCK_MHZ(10))) {
+    // fileEnable = checkSDFile();
+    fileEnable = true;
   } else {
-    display.drawString(0,48,"SD begin failed.");
-    display.display();
+    oled.setCursor(0,6);
+    oled.println("SD begin failed.");
     fileEnable=false;
   }
   logFileOpened=false;
   delay(2000);
+  
+  oled.setCursor(0,0);
+  oled.clearToEOL();
 
-  // enable timer2 (timer library)
+// enable timer2 (timer library)
 //  MsTimer2::set(60000, flushSD);
 //  MsTimer2::start();
   ticker.attach_ms(60000, flushSD);
@@ -173,36 +193,31 @@ void loop()
   int swStatus;
 
   swStatus = analogRead(A0);
-//  display.drawString(0,16,String(swStatus));
-  if (runMode == 1 && swStatus <= SW_THRESHOLD) {
-    runMode = 0; // logging turn off
-    digitalWrite(LED_BUILTIN, HIGH); // turn off (active LOW)
-    if (logFileOpened == true) {
-      logFile.close();
-      logFileOpened = false;
-    }
-  } else if (runMode == 0 && swStatus > SW_THRESHOLD) { // logging turn on
-    runMode = 1;
-    if (logFileOpened == false) {
-      if(!fileEnable) {
-        fileEnable = checkSDFile();
+  if(fileEnable) {
+    if (runMode == 1 && swStatus <= SW_THRESHOLD) {
+      runMode = 0; // logging turn off
+      digitalWrite(LED_BUILTIN, HIGH); // turn off (active LOW)
+      if (logFileOpened == true) {
+        logFile.close();
+        logFileOpened = false;
       }
-      if(fileEnable) {
-        logFile = SD.open(filename, FILE_WRITE);
-      }
-      
-      if(!logFile || !fileEnable) {
-        display.drawString(0,48,"Can't open logfile");
-      } else {
-        logFileOpened=true;
-        digitalWrite(LED_BUILTIN, LOW); // turn on (active LOW)
-      }
+    } else if (runMode == 0 && swStatus > SW_THRESHOLD) { // logging turn on
+      runMode = 1;
+      if (logFileOpened == false) {
+        if(strlen(filename)==0) {
+          strcpy(filename,"GPtemp.txt");
+        }
+        if(!logFile.open(filename, FILE_WRITE)) {
+          oled.print("Can't open logfile");
+          fileEnable = false;
+          logFileOpened=false;
+         } else {
+           logFileOpened=true;
+         }
+      }           
+      digitalWrite(LED_BUILTIN, LOW); // turn on (active LOW)
     }
   }
-//  if(!fileEnable) {
-//    display.drawString(0,48,"SD failed");
-//  }
-
   doLogging();
 }
 
@@ -212,10 +227,10 @@ void doLogging()
   char latitude[11], longtude[12];
   char NS[2], WE[2];
   char statGPS[2];
-  char GPSStr[7];
+//  char GPSStr[7];
   char localTime0[9], localDate0[9];
   int offset;
-  int xpos;
+//  int xpos;
 
   if (Serial.available()) {  // if recived serial signal
 //    digitalWrite(LED_BUILTIN,LOW);
@@ -228,22 +243,22 @@ void doLogging()
 //    digitalWrite(LED_BUILTIN,HIGH);
 
     // Display date/time/latitude/longitude
-    offset = strip_NMEA(strbuf, 0, 1);
+    offset = strip_NMEA(0, 1);
     //      strcpy(GPSStr,s1);
     if (strcmp(s1, "$GNRMC") == 0) { // if RMC line
-      offset = strip_NMEA(strbuf, offset, 1); // utcTime
+      offset = strip_NMEA(offset, 1); // utcTime
       strcpy(utcTime, s1);
-      offset = strip_NMEA(strbuf, offset, 1); // status
+      offset = strip_NMEA(offset, 1); // status
       strcpy(statGPS, s1);
-      offset = strip_NMEA(strbuf, offset, 1); // latitue
+      offset = strip_NMEA(offset, 1); // latitue
       strcpy(latitude, s1);
-      offset = strip_NMEA(strbuf, offset, 1); // N/W
+      offset = strip_NMEA(offset, 1); // N/W
       strcpy(NS, s1);
-      offset = strip_NMEA(strbuf, offset, 1); // longitude
+      offset = strip_NMEA(offset, 1); // longitude
       strcpy(longtude, s1);
-      offset = strip_NMEA(strbuf, offset, 1); // W/E
+      offset = strip_NMEA(offset, 1); // W/E
       strcpy(WE, s1);
-      offset = strip_NMEA(strbuf, offset, 3); // utcDate
+      offset = strip_NMEA(offset, 3); // utcDate
       strcpy(utcDate, s1);
 
       gpsDate(utcDate);
@@ -251,24 +266,25 @@ void doLogging()
       UCTtoLT();
       sprintf(localDate0, "%02d/%02d/%02d", gpsYear,gpsMonth,gpsDay);
       sprintf(localTime0, "%02d:%02d:%02d", gpsHour,gpsMin,gpsSec);
-      display.clear();
-      display.drawString(0,0,localTime0);
-      xpos=display.getStringWidth(localTime0);
-      display.drawString(xpos,0,localDate0);
+      sprintf(filename, "GP%02d%02d%02d.txt", gpsYear,gpsMonth,gpsDay);
+
+      oled.setCursor(0,0);
+      oled.print(localTime0);
+      oled.setCursor(64,0);
+      oled.print(localDate0);
 
       if (strchr(statGPS, 'A')) {
-        xpos=0;
-        display.drawString(xpos,16,NS);
-        xpos+=display.getStringWidth(NS);
-        display.drawString(xpos,16,latitude);
-        xpos=0;
-        display.drawString(xpos,32,WE);
-        xpos+=display.getStringWidth(WE);
-        display.drawString(xpos,32,longtude);
+        oled.setCursor(0,2);
+        oled.print(NS);
+        oled.print(latitude);
+        oled.setCursor(0,4);
+        oled.print(WE);
+        oled.print(longtude);
       } else {
-        display.drawString(0,16,"GPS invalid");
+        oled.setCursor(0,2);
+        oled.print("GPS invalid");
       }
-      display.display();
+	  
     }
   }
 }
@@ -289,21 +305,26 @@ void recvStr()
   i++;
   strbuf[i] = '\0';  // \0: end of string
 //  if(digitalRead(SW_PIN_NO)){
+/*
     strncpy(substr,strbuf,6);
     substr[6]='\0';
-    display.drawString(0,48,substr);
-    display.display();
+    oled.setCursor(0,6);
+    oled.print(substr);
+    */
+    oled.setCursor(0,6);
+    oled.print(strbuf);
+    
 //  }
 }
 
 // get info from NMEA sentence
-int strip_NMEA(char *orig, int offset, int count)
+unsigned int strip_NMEA(unsigned int offset, int count)
 {
   char *str0, *s0;
   int i, len;
 
   for (i = 0; i < count; i++) {
-    str0 = orig + offset;
+    str0 = strbuf+offset;
     s0 = strchr(str0, ',');
     len = strlen(str0) - strlen(s0);
     strncpy(s1, str0, len); // len < BUF2SIZE +1 assumed
@@ -318,35 +339,38 @@ bool checkSDFile()
 {
   // check log file
   int i, loopmax = 100;
-  int xpos;
 
+  oled.setCursor(0,6);
   for (i = 0; i < loopmax; i++) {
     if(setFileName()) 
       break;
     if(i%10==0)
     {
-      display.drawString(0,48,String(i/10)+':');
-      xpos+=display.getStringWidth(String(i/10)+':');
+      oled.setCursor(0,6);
+      oled.clearToEOL();
+      oled.print(i/10);
+      oled.print(':');
     }
-    display.drawString(xpos,48,String(i%10));
+    oled.print(i%10);
     delay(500);
-    display.display();
   }
   if(strlen(filename)==0) 
     strcpy(filename,"GPtemp.txt");
-  display.drawString(0,0,"Opening log file");
-  display.display();
+  oled.println("Opening log file");
 
 // open log file
-  logFile = SD.open(filename, FILE_WRITE);
-  if (!logFile) {
-    display.drawString(0,48,"Can't open logfile");
-    display.display();
+  if (!logFile.open(filename, FILE_WRITE)) {
+    oled.setCursor(0,6);
+    oled.print("Can't open logfile");
     return false;
   }
-  display.drawString(0,0,"Log file opened.");
-  display.drawString(0,48,filename);
-  display.display();
+  oled.clear();
+  oled.setCursor(0,0);
+  oled.print("Log file opened.");
+  oled.setCursor(0,6);
+  oled.clearToEOL();
+  oled.setCursor(64,6);
+  oled.print(filename);
   logFile.close();
   SdFile::dateTimeCallback( &dateTime );
   return true;
@@ -508,9 +532,10 @@ void UCTtoLT()
   }
 }
 
-int mysubstr(char *t, const char *s, int pos, int len )
+int mysubstr(char *t, const char *s, int pos, unsigned int len )
 {
-    if( pos < 0 || len < 0 || len > strlen(s) )
+//    if( pos < 0 || len < 0 || len > strlen(s) )
+    if( pos < 0 || len > strlen(s) )
         return -1;
     for( s += pos; *s != '\0' && len > 0; len-- )
         *t++ = *s++;
@@ -520,18 +545,18 @@ int mysubstr(char *t, const char *s, int pos, int len )
 
 bool setFileName()
 {
-  char GPSStr[7];
+//  char GPSStr[7];
   char utcTime[10], utcDate[7];
-  int offset;
+  unsigned int offset;
 
   if (Serial.available()) {  // if recived serial signal
 //    digitalWrite(LED_BUILTIN,LOW);
     recvStr();   // read serial data to string buffer
-    offset = strip_NMEA(strbuf, 0, 1);
+    offset = strip_NMEA(0, 1);
     if (strcmp(s1, "$GNRMC") == 0) { // if RMC line
-      offset = strip_NMEA(strbuf, offset, 1); // utcTime
+      offset = strip_NMEA(offset, 1); // utcTime
       strcpy(utcTime, s1);
-      offset = strip_NMEA(strbuf, offset, 8); // utcDate
+      offset = strip_NMEA(offset, 8); // utcDate
       strcpy(utcDate, s1);
       if (strlen(utcDate) == 6 ) { // if date utcDate is valid
         gpsDate(utcDate);
@@ -549,11 +574,12 @@ bool setFileName()
 void flushSD()
 {
   if (logFileOpened == true) {
-    digitalWrite(LED_BUILTIN, HIGH);
+    digitalWrite(LED_BUILTIN, HIGH); // actiate LOW
     logFile.flush();
-    display.drawString(0,48,filename);
-    display.display();
+    oled.setCursor(0,6);
+    oled.clearToEOL();
+    oled.print(filename);
     delay(500);
-    digitalWrite(LED_BUILTIN, LOW);
+    digitalWrite(LED_BUILTIN, LOW); // activate LOW
   }
 }

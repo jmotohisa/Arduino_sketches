@@ -270,9 +270,9 @@ void recvStr()
   i++;
   strbuf[i] = '\0';  // \0: end of string
 //  if(digitalRead(SW_PIN_NO)){
-    oled.setCursor(0,6);
     strncpy(substr,strbuf,6);
     substr[6]='\0';
+    oled.setCursor(0,6);
     oled.print(substr);
 //  }
 }
