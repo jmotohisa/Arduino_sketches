@@ -52,26 +52,50 @@
 
 */
 
-//#define USE_SOFTWARE_SERIAL_MONITOR
+//#define _SS_MAX_RX_BUFF 160
+
+// uncomment if debug and use serial
+#define DEBUG_SERIAL
+
+// uncomment if use STM32F103 (blue pill) with STM32duino bootoloader
+#define STM32duino
 
 //#include <Wire.h>
 #include <SPI.h>
 #include <SD.h>
+#ifndef STM32duino
 #include <SoftwareSerial.h>
+#endif
 //#include <MsTimer2.h>
 #include "SSD1306Ascii.h"
-//#include "SSD1306AsciiWire.h"
-#include "SSD1306AsciiAvrI2c.h"
+#include "SSD1306AsciiWire.h"
+//#include "SSD1306AsciiAvrI2c.h"
 
 #define SD_CHIP_SELECT 10
 #define TimeZone (9)
-#define SW_PIN_NO 6
+
+#ifndef STM32duino
 #define LED_PIN_NO 7
-#define BUFSIZE 100
+#define SW_PIN_NO 6
+#define LED_ON HIGH
+#define LED_OFF LOW
+#else
+#define LED_PIN_NO PC13
+#define SW_PIN_NO 6
+#define LED_ON LOW
+#define LED_OFF HIGH
+#endif
+
+#define BUFSIZE 128
 #define BUF2SIZE 12
 
 // initialize the library with the numbers of the interface pins
+#ifndef STM32duino
 SoftwareSerial gps(8, 9); // RX, TX
+//#define GPS gps
+#else
+//#define GPS Serial3
+#endif
 
 // setup u8g object
 //U8GLIB_SSD1306_128X64 u8g(U8G_I2C_OPT_NONE | U8G_I2C_OPT_DEV_0); // I2C / TWI
@@ -81,8 +105,8 @@ SoftwareSerial gps(8, 9); // RX, TX
 // Define proper RST_PIN if required.
 #define RST_PIN -1
 
-//SSD1306AsciiWire oled;
-SSD1306AsciiAvrI2c oled;
+SSD1306AsciiWire oled;
+//SSD1306AsciiAvrI2c oled;
 
 File logFile;
 
@@ -98,18 +122,23 @@ bool runMode;
 bool logFileOpened;
 
 void setup() {
+#ifdef DEBUG_SERIAL
+  Serial.begin(115200);
+  delay(1000);
+  Serial.println("GPS Logger Start");
+#endif
 
   pinMode(LED_PIN_NO, OUTPUT) ;      // LEDに接続
   pinMode(SW_PIN_NO, INPUT_PULLUP ) ; // SW に接続し内部プルアップに設定
 
   // initialize OLED Display M096P4BL
-//  Wire.begin();
-//  Wire.setClock(400000L);
+  Wire.begin();
+  Wire.setClock(400000L);
 #if RST_PIN >= 0
   oled.begin(&Adafruit128x64, I2C_ADDRESS, RST_PIN);
-#else // RST_PIN >= 0
+#else // RST_PIN < 0
   oled.begin(&Adafruit128x64, I2C_ADDRESS);
-#endif // RST_PIN >= 0
+#endif // RST_PIN
   // Call oled.setI2cClock(frequency) to change from the default frequency.
 
   oled.setFont(X11fixed7x14);
@@ -119,7 +148,18 @@ void setup() {
 
   // initialize Hardware Serial and GPS
   delay(1000);
-  gps.begin(9600); // Hardware Serial
+#ifndef STM32duino
+  gps.begin(9600);
+  while (gps.available() > 0) {
+    gps.read();
+  }
+#else
+  Serial3.begin(9600); // Hardware Serial
+  while (Serial3.available() > 0) {
+    Serial3.read();
+  }
+#endif
+  // Clear input buffer
   // configure output of GM - 8013T
   configure_GP8013T();
   
@@ -161,7 +201,7 @@ void loop()
   swStatus = digitalRead(SW_PIN_NO);
   if (runMode == 1 && swStatus == LOW) {
     runMode = 0; // logging turn off
-    digitalWrite(LED_PIN_NO, LOW);
+    digitalWrite(LED_PIN_NO, LED_OFF);
     if (logFileOpened == true) {
       logFile.close();
       logFileOpened = false;
@@ -181,7 +221,7 @@ void loop()
         oled.print("Can't open logfile");
       } else {
         logFileOpened=true;
-        digitalWrite(LED_PIN_NO, HIGH);
+        digitalWrite(LED_PIN_NO, LED_ON);
       }
     }
   }
@@ -198,15 +238,22 @@ void doLogging()
   char localTime0[9], localDate0[9];
   int offset;
 
+#ifndef STM32duino
   if (gps.available()) {  // if recived serial signal
-//    digitalWrite(LED_PIN_NO,HIGH);
+#else
+  if (Serial3.available()) {  // if recived serial signal
+#endif
+//    digitalWrite(LED_PIN_NO,LED_ON);
     recvStr();   // read serial data to string buffer
+#ifdef DEBUG_SERIAL
+  Serial.print(strbuf);
+#endif
     if (logFileOpened == true) {
       logFile.print(strbuf);
       logFile.flush();
     } else {
   }
-//    digitalWrite(LED_PIN_NO,LOW);
+//    digitalWrite(LED_PIN_NO,LED_OFF);
 
     // Display date/time/latitude/longitude
     offset = strip_NMEA(strbuf, 0, 1);
@@ -260,8 +307,13 @@ void recvStr()
   int i = 0;
   char c;
   while (1) {
+#ifndef STM32duino
     if (gps.available()) {
       c = gps.read();
+#else
+    if (Serial3.available()) {
+      c = Serial3.read();
+#endif
       strbuf[i] = c;
       if (c == '\n') break;
       i++;
@@ -318,6 +370,11 @@ bool checkSDFile()
   if(strlen(filename)==0) 
     strcpy(filename,"GPtemp.txt");
   oled.println("Opening log file");
+#ifdef DEBUG_SERIAL
+  Serial.print("logfile: ");
+  Serial.print(filename);
+  Serial.println(" opened");
+#endif
 
 // open log file
   logFile = SD.open(filename, FILE_WRITE);
@@ -341,40 +398,66 @@ bool checkSDFile()
 void send_nmea_command(const char *p)
 {
   uint8_t checksum = 0;
+#ifndef STM32duino
   gps.print('$');
+#else
+  Serial3.print('$');
+#endif
   do {
     char c = *p++;
     if (c) {
       checksum ^= (uint8_t)c;
+#ifndef STM32duino
       gps.print(c);
+#else
+      Serial3.print(c);
+#endif
     }
     else {
       break;
     }
   }
   while (1);
+#ifndef STM32duino
   gps.print('*');
   gps.println(checksum, HEX);
+#else
+  Serial3.print('*');
+  Serial3.println(checksum, HEX);
+#endif
   //  gps.print("\n\r");
 }
 
 void send_PUBX_packet(const char *p)
 {
   uint8_t checksum = 0;
+#ifndef STM32duino
   gps.print('$');
+#else
+  Serial3.print('$');
+#endif
   do {
     char c = *p++;
     if (c) {
       checksum ^= (uint8_t)c;
+#ifndef STM32duino
       gps.print(c);
+#else
+      Serial3.print(c);
+#endif
     }
     else {
       break;
     }
   }
   while (1);
+#ifndef STM32duino
   gps.print('*');
   gps.println(checksum, HEX);
+#else
+  Serial3.print('*');
+  Serial3.println(checksum, HEX);
+#endif
 }
 
 // $GNRMC, $GNVTG, $GNGGA, $GPGSV, $GLGSV, $GNGLL, $GNGSA
@@ -510,9 +593,16 @@ bool setFileName()
   char utcTime[10], utcDate[7];
   int offset;
 
+#ifndef STM32duino
   if (gps.available()) {  // if recived serial signal
-//    digitalWrite(LED_PIN_NO,HIGH);
+#else
+  if (Serial3.available()) {  // if recived serial signal
+#endif
+//    digitalWrite(LED_PIN_NO,LED_ON);
     recvStr();   // read serial data to string buffer
+#ifdef DEBUG_SERIAL
+  Serial.print(strbuf);
+#endif
     offset = strip_NMEA(strbuf, 0, 1);
     if (strcmp(s1, "$GNRMC") == 0) { // if RMC line
       offset = strip_NMEA(strbuf, offset, 1); // utcTime
@@ -527,7 +617,7 @@ bool setFileName()
         return true;
       }
     }
-//    digitalWrite(LED_PIN_NO,LOW);
+//    digitalWrite(LED_PIN_NO,LED_OFF);
   }
   return false;
 }
@@ -535,12 +625,12 @@ bool setFileName()
 void flushSD()
 {
   if (logFileOpened == true) {
-    digitalWrite(LED_PIN_NO, LOW);
+    digitalWrite(LED_PIN_NO, LED_OFF);
     logFile.flush();
     oled.setCursor(0,6);
     oled.clearToEOL();
     oled.print(filename);
     delay(500);
-    digitalWrite(LED_PIN_NO, HIGH);
+    digitalWrite(LED_PIN_NO, LED_ON);
   }
 }
