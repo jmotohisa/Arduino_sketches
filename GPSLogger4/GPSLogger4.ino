@@ -16,6 +16,19 @@
  ** MISO - pin 12 on Arduino Uno/Duemilanove/Diecimila   - PA6
  ** CLK - pin 13 on Arduino Uno/Duemilanove/Diecimila    - PA5
  ** CS - depends on your SD card shield or module. ->10  - PA4
+ * 
+ microSD
+ 1 DAT2
+ 2 CD/DAT3: CS
+ 3 CMD: MOSI
+ 4 VDD: 3.3
+ 5 CLK: CLK
+ 6 VSS: GND
+ 7 DAT: MISO
+ 8 DAT1
+ 9 Card A
+ 10 Card B
+ 
 */
 
 /* Arduino  (with software serial) - GM-8013T - Blue pill (Serial2/UART2)
@@ -83,7 +96,7 @@
 #define SD_CHIP_SELECT 10
 #else
 #define LED_PIN_NO PC13
-#define SW_PIN_NO 6
+#define SW_PIN_NO PB5
 #define LED_ON LOW
 #define LED_OFF HIGH
 #define SD_CHIP_SELECT PA4
@@ -204,6 +217,9 @@ void loop()
   swStatus = digitalRead(SW_PIN_NO);
   if (runMode == 1 && swStatus == LOW) {
     runMode = 0; // logging turn off
+#ifdef DEBUG_SERIAL
+  Serial.println("logging stopped");
+#endif
     digitalWrite(LED_PIN_NO, LED_OFF);
     if (logFileOpened == true) {
       logFile.close();
@@ -223,6 +239,10 @@ void loop()
         oled.setCursor(0,6);
         oled.print("Can't open logfile");
       } else {
+#ifdef DEBUG_SERIAL
+        Serial.print("Logging Started with filename:");
+        Serial.println(filename);
+#endif
         logFileOpened=true;
         digitalWrite(LED_PIN_NO, LED_ON);
       }

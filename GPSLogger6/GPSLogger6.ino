@@ -18,6 +18,19 @@
  ** MISO - pin 12 on Arduino Uno/Duemilanove/Diecimila   - PA6
  ** CLK - pin 13 on Arduino Uno/Duemilanove/Diecimila    - PA5
  ** CS - depends on your SD card shield or module. ->10  - PA4
+
+ microSD
+ 1 DAT2
+ 2 CD/DAT3: CS
+ 3 CMD: MOSI
+ 4 VDD: 3.3
+ 5 CLK: CLK
+ 6 VSS: GND
+ 7 DAT: MISO
+ 8 DAT1
+ 9 Card A
+ 10 Card B
+
 */
 
 /* Arduino  (with software serial) - GM-8013T - Blue pill (Serial2/UART2)
@@ -57,19 +70,26 @@
 */
 
 // uncomment if debug and use serial
-#define DEBUG_SERIAL
+//#define DEBUG_SERIAL
 
 // uncomment if use STM32F103 (blue pill) with STM32duino bootoloader
-#define STM32duino
+// #define STM32duino
+
+// uncomment if flush timer enable
+#define FLUSH_TIMER_ENABLE
 
 //#include <Wire.h>
 #include <SPI.h>
 #include <SD.h>
 #include <TinyGPS++.h>
 #ifndef STM32duino
-#include <SoftwareSerial.h>
+  #include <SoftwareSerial.h>
 #endif
-//#include <MsTimer2.h>
+#ifdef FLUSH_TIMER_ENABLE
+  #ifndef STM32duino
+    #include <MsTimer2.h>
+  #endif
+#endif
 #include "SSD1306Ascii.h"
 #include "SSD1306AsciiWire.h"
 
@@ -84,13 +104,13 @@
 #define SD_CHIP_SELECT 10
 #else
 #define LED_PIN_NO PC13
-#define SW_PIN_NO 6
+#define SW_PIN_NO PB5
 #define LED_ON LOW
 #define LED_OFF HIGH
 #define SD_CHIP_SELECT PA4
 #endif
 
-#define BUFSIZE 100
+#define BUFSIZE 20
 #define BUF2SIZE 12
 
 TinyGPSPlus gps;
@@ -119,9 +139,7 @@ uint16_t gpsYear;
 uint8_t gpsDay, gpsMonth;
 
 char strbuf[BUFSIZE];
-char s1[BUF2SIZE];
-char filename[13];
-char substr[7];
+char filename[14];
 bool fileEnable;
 bool runMode;
 bool logFileOpened;
@@ -155,7 +173,7 @@ void setup() {
   Serial2.begin(9600);
   delay(1000);
   // configure output of GM - 8013T
-  configure_GP8013T();
+//  configure_GP8013T();
   
   oled.print("GPS ready");
 #ifdef DEBUG_SERIAL
@@ -171,7 +189,7 @@ void setup() {
   oled.print("Init SD card");
   pinMode(SD_CHIP_SELECT, OUTPUT);
   if (SD.begin(SD_CHIP_SELECT)) {
-//    fileEnable = checkSDFile();
+    fileEnable = checkSDFile();
   } else {
     oled.setCursor(0,6);
 //    oled.clearToEOL();
@@ -185,10 +203,15 @@ void setup() {
   oled.clearToEOL();
 
   // enable timer2
-//  MsTimer2::set(60000, flushSD);
-//  MsTimer2::start();
+#ifdef FLUSH_TIMER_ENABLE
+#ifndef STM32duino
+  MsTimer2::set(60000, flushSD);
+  MsTimer2::start();
+#endif
+#endif
 
   runMode = 0;
+  digitalWrite(LED_PIN_NO, LED_OFF);
 }
 
 void loop()
@@ -198,6 +221,9 @@ void loop()
   swStatus = digitalRead(SW_PIN_NO);
   if (runMode == 1 && swStatus == LOW) {
     runMode = 0; // logging turn off
+#ifdef DEBUG_SERIAL
+  Serial.println("Logging stopped");
+#endif    
     digitalWrite(LED_PIN_NO, LED_OFF);
     if (logFileOpened == true) {
       logFile.close();
@@ -207,7 +233,7 @@ void loop()
     runMode = 1;
     if (logFileOpened == false) {
       if(!fileEnable) {
-//        fileEnable = checkSDFile();
+        fileEnable = checkSDFile();
       }
       if(fileEnable) {
         logFile = SD.open(filename, FILE_WRITE);
@@ -218,7 +244,10 @@ void loop()
         oled.print("Can't open logfile");
       } else {
         logFileOpened=true;
-        digitalWrite(LED_PIN_NO, LED_ON);
+ #ifdef DEBUG_SERIAL
+        Serial.println("Logging Started.");
+#endif    
+       digitalWrite(LED_PIN_NO, LED_ON);
       }
     }
   }
@@ -227,17 +256,15 @@ void loop()
 
 void doLogging()
 {
-  //  char utcTime[10], utcDate[7];
   double latitude,longtude;
-  char localTime0[9], localDate0[9];
 
   smartDelay(logPeriod);
   if (millis() > logPeriod*5 && gps.charsProcessed() < 10) {
-#if DEBUG_SERIAL
+#ifdef DEBUG_SERIAL
     Serial.println(F("No GPS data received: check wiring"));
 #endif
 	oled.setCursor(0,0);
-	old.print("GPS invalid");
+	oled.print("GPS invalid");
   }
 
   if (gps.location.isValid()) {
@@ -248,7 +275,7 @@ void doLogging()
 	longtude = 0;
 	oled.setCursor(0,2);
 	oled.print("GPS invalid");
-#if DEBUG_SERIAL
+#ifdef DEBUG_SERIAL
 	Serial.println("GPS Invalid");
 #endif
   }
@@ -271,22 +298,25 @@ void doLogging()
 	gpsSec = 0;
   }
   if (logFileOpened == true) {
-	log_to_file();
-	logFile.flush();
+  	log_to_file();
+#ifndef FLUSH_TIMER_ENABLE
+	  logFile.flush();
+#endif
   }
   
   // output data to Serial
 #ifdef DEBUG_SERIAL
-  Serial.print(latitude, 6);
+  Serial.print(latitude, 9);
   Serial.print(F(","));
-  Serial.print(longtude, 6);
+  Serial.print(longtude, 9);
+  Serial.print(F(","));
   
   Serial.print(gpsMonth);
   Serial.print(F("/"));
   Serial.print(gpsDay);
   Serial.print(F("/"));
   Serial.print(gpsYear);
-  Serial.print(F(" "));
+  Serial.print(F(","));
   
   if (gpsHour < 10) Serial.print(F("0"));
   Serial.print(gpsHour);
@@ -297,7 +327,7 @@ void doLogging()
   if (gpsSec < 10) Serial.print(F("0"));
   Serial.println(gpsSec);
 #endif
-  
+
   // Display GPS data
   oled.setCursor(0,2);
   if(latitude>0) {
@@ -305,23 +335,29 @@ void doLogging()
   } else {
 	oled.print("S");
   }
-  oled.print(latitude);
+  sprintf(strbuf,"%lf",latitude);
+//  oled.print(latitude);
+  oled.print(strbuf);
+
   oled.setCursor(0,4);
   if(longtude>0) {
 	oled.print("E");
   }  else {
 	oled.print("W");
   }
-  oled.print(longtude);
+  sprintf(strbuf,"%lf",longtude);
+//  oled.print(longtude);
+  oled.print(strbuf);
   
   UCTtoLT();
   // Display date/time
-  sprintf(localDate0, "%02d/%02d/%02d", gpsYear,gpsMonth,gpsDay);
-  sprintf(localTime0, "%02d:%02d:%02d", gpsHour,gpsMin,gpsSec);
   oled.setCursor(0,0);
-  oled.print(localTime0);
+  sprintf(strbuf, "%02d:%02d:%02d", gpsHour,gpsMin,gpsSec);
+  oled.print(strbuf);
+
   oled.setCursor(64,0);
-  oled.print(localDate0);
+  sprintf(strbuf, "%02d/%02d/%02d", gpsYear%100,gpsMonth,gpsDay);
+  oled.print(strbuf);
 }
 
 bool checkSDFile()
@@ -331,17 +367,14 @@ bool checkSDFile()
 
   oled.setCursor(0,6);
   for (i = 0; i < loopmax; i++) {
-    if(setFileName()) 
-      break;
-    if(i%10==0)
+    if(setFileName())
     {
-      oled.setCursor(0,6);
-      oled.clearToEOL();
-      oled.print(i/10);
-      oled.print(':');
+#ifdef DEBUG_SERIAL
+      Serial.print("Log File name:");
+      Serial.println(filename);
+#endif
+      break;
     }
-    oled.print(i%10);
-    delay(500);
   }
   if(strlen(filename)==0) 
     strcpy(filename,"GPtemp.csv");
@@ -539,20 +572,23 @@ void UCTtoLT()
 
 bool setFileName()
 {
-  if (Serial2.available()) {  // if recived serial signal
-	//    digitalWrite(LED_PIN_NO,LED_ON);
-    gps.decode(Serial2.read());
+  smartDelay(1000);
 	if (gps.date.isValid())
-	  {
+	{
+#ifdef DEBUG_SERIAL
+    Serial.println("Date for filename fixed.");
+#endif
 		gpsMonth=gps.date.month();
 		gpsYear=gps.date.year() % 100;
 		gpsDay=gps.date.day();
-        UCTtoLT();
-        sprintf(filename, "GP%02d%02d%02d.csv", gpsYear,gpsMonth,gpsDay);
-        return true;
-      }
-	//    digitalWrite(LED_PIN_NO,LED_OFF);
+    UCTtoLT();
+    sprintf(filename, "GP%02d%02d%02d.csv", gpsYear,gpsMonth,gpsDay);
+    return true;
   }
+	// digitalWrite(LED_PIN_NO,LED_OFF);
+#ifdef DEBUG_SERIAL
+    Serial.println("Date invalid.");
+#endif
   return false;
 }
 
@@ -577,8 +613,10 @@ void log_to_file()
   logFile.print(gpsHour);  logFile.print(",");
   logFile.print(gpsMin);  logFile.print(",");
   logFile.print(gpsSec);  logFile.print(",");
-  logFile.print(gps.location.lat());  logFile.print(",");
-  logFile.print(gps.location.lng());  logFile.print(",");
+  sprintf(strbuf,"%lf",gps.location.lat());
+  logFile.print(strbuf);  logFile.print(",");
+  sprintf(strbuf,"%lf",gps.location.lng());
+  logFile.print(strbuf);  logFile.print(",");
   logFile.print(gps.altitude.meters()); logFile.print(",");
   logFile.print(gps.course.deg());logFile.print(",");
   logFile.print(gps.speed.kmph());
