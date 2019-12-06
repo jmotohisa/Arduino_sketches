@@ -1,7 +1,7 @@
 // GPS Logger version 3
 
 /* with
-   GT-720F
+   GP8013T
    SDcard
    M096P4BL
 */

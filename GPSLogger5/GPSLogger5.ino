@@ -1,10 +1,11 @@
 // GPS Logger version 5.0
 
-/* with
+/*
   ESP8266 ESP-12E
-   GT-902PMGG (u-Blox 8)
+  with
+   u-Blox GM-8013T or GT-902PMGG (u-Blox 8)
    SDcard
-   M096P4BL
+   M096P4BL (SSD1306) 
 */
 
 #include <ESP8266WiFi.h>
