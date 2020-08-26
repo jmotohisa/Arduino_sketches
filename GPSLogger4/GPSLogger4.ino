@@ -1,4 +1,4 @@
-// GPS Logger version 4.2
+// GPS Logger version 4.0
 
 /* with
    u-Blox GM-8013T
@@ -191,10 +191,11 @@ void loop()
 void doLogging()
 {
   char utcTime[10], utcDate[7];
-  /* char latitude[11], longtude[12]; */
-  /* char NS[2], WE[2]; */
+  char latitude[11], longtude[12];
+  char NS[2], WE[2];
   char statGPS[2];
  // char GPSStr[7];
+  char localTime0[9], localDate0[9];
   int offset;
 
   if (gps.available()) {  // if recived serial signal
@@ -215,38 +216,40 @@ void doLogging()
       strcpy(utcTime, s1);
       offset = strip_NMEA(strbuf, offset, 1); // status
       strcpy(statGPS, s1);
-	  
-      if (strchr(statGPS, 'A')) { // if valid GPS data
-		offset = strip_NMEA(strbuf, offset, 1); // latitue
-        oled.setCursor(0,2);
-        oled.print(s1);
-		offset = strip_NMEA(strbuf, offset, 1); // N/W
-        oled.print(s1);
-		
-		offset = strip_NMEA(strbuf, offset, 1); // longitude
-        oled.setCursor(0,4);
-        oled.print(s1);
-		offset = strip_NMEA(strbuf, offset, 1); // W/E
-        oled.print(s1);
+      offset = strip_NMEA(strbuf, offset, 1); // latitue
+      strcpy(latitude, s1);
+      offset = strip_NMEA(strbuf, offset, 1); // N/W
+      strcpy(NS, s1);
+      offset = strip_NMEA(strbuf, offset, 1); // longitude
+      strcpy(longtude, s1);
+      offset = strip_NMEA(strbuf, offset, 1); // W/E
+      strcpy(WE, s1);
+      offset = strip_NMEA(strbuf, offset, 3); // utcDate
+      strcpy(utcDate, s1);
 
-		offset = strip_NMEA(strbuf, offset, 3); // utcDate
-	  } else {
-        oled.setCursor(0,2);
-        oled.print("GPS invalid");
-		offset = strip_NMEA(strbuf, offset, 8); // utcDate
-      }
-	  strcpy(utcDate, s1);
-	  
       gpsDate(utcDate);
       gpsTime(utcTime);
       UCTtoLT();
-	  oled.setCursor(0,0);
-	  sprintf(strbuf, "%02d:%02d:%02d", gpsHour,gpsMin,gpsSec);
-	  oled.print(strbuf);
-	  
-	  oled.setCursor(64,0);
-	  sprintf(strbuf, "%02d/%02d/%02d", gpsYear%100,gpsMonth,gpsDay);
-	  oled.print(strbuf);
+      sprintf(localDate0, "%02d/%02d/%02d", gpsYear,gpsMonth,gpsDay);
+      sprintf(localTime0, "%02d:%02d:%02d", gpsHour,gpsMin,gpsSec);
+
+      oled.setCursor(0,0);
+      oled.print(localTime0);
+      oled.setCursor(64,0);
+      oled.print(localDate0);
+
+      if (strchr(statGPS, 'A')) {
+        oled.setCursor(0,2);
+        oled.print(NS);
+        oled.print(latitude);
+        oled.setCursor(0,4);
+        oled.print(WE);
+        oled.print(longtude);
+      } else {
+        oled.setCursor(0,2);
+        oled.print("GPS invalid");
+      }
+
     }
   }
 }
