@@ -63,7 +63,7 @@
 #include <SPI.h>
 #include <SD.h>
 #include <SoftwareSerial.h>
-//#include <MsTimer2.h>
+#include <MsTimer2.h>
 //#include "SSD1306Ascii.h"
 //#include "SSD1306AsciiWire.h"
 //#include "SSD1306AsciiAvrI2c.h"
@@ -106,10 +106,10 @@ void setup() {
 
 #ifdef DEBUG_SERIAL
   Serial.begin(115200);
-  while (!Serial) {
-    ; // wait for serial port to connect. Needed for native USB port only
-  }
-//  delay(1000);
+//  while (!Serial) {
+//    ; // wait for serial port to connect. Needed for native USB port only
+//  }
+  delay(1000);
   Serial.println("GPS Logger Start");
 #endif
 
@@ -131,7 +131,7 @@ void setup() {
 //  oled.clear();
 //  oled.setCursor(0,0);
 
-  // initialize Hardware Serial and GPS
+  // initialize and GPS
   delay(1000);
   gps.begin(9600); // Hardware Serial
   // configure output of GM - 8013T
@@ -165,8 +165,8 @@ void setup() {
 //  oled.clearToEOL();
 
   // enable timer2
-//  MsTimer2::set(60000, flushSD);
-//  MsTimer2::start();
+  MsTimer2::set(60000, flushSD);
+  MsTimer2::start();
 
   runMode = 0;
 }
