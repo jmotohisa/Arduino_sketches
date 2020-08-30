@@ -5,7 +5,6 @@
 /* with
    u-Blox GM-8013T
    SDcard
-//   M096P4BL
 */
 
 /* note
@@ -52,35 +51,23 @@
 // uncomment if debug and use serial
 #define DEBUG_SERIAL
 
-//#include <Wire.h>
-#include <SPI.h>
 #include <SD.h>
 #include <SoftwareSerial.h>
+#include <MsTimer2.h>
 
 #define SD_CHIP_SELECT 10
 #define TimeZone (9)
 #define SW_PIN_NO 6
 #define LED_PIN_NO 7
-#define BUFSIZE 100
-#define BUF2SIZE 12
+#define BUFSIZE 200
 
 // initialize the library with the numbers of the interface pins
 SoftwareSerial gps(8, 9); // RX, TX
 
-// setup u8g object
-//U8GLIB_SSD1306_128X64 u8g(U8G_I2C_OPT_NONE | U8G_I2C_OPT_DEV_0); // I2C / TWI
-// 0X3C+SA0 - 0x3C or 0x3D
-//#define I2C_ADDRESS 0x3C
-
-// Define proper RST_PIN if required.
-// #define RST_PIN -1
-
 File logFile;
 
 char strbuf[BUFSIZE];
-char s1[BUF2SIZE];
 char filename[13];
-//char substr[7];
 bool fileEnable;
 bool runMode;
 bool logFileOpened;
@@ -119,6 +106,10 @@ void setup()
   logFileOpened=false;
   delay(2000);
 
+  // enable timer2
+  MsTimer2::set(60000, flushSD);
+  MsTimer2::start();
+
   runMode = 0;
 }
 
@@ -147,10 +138,7 @@ void loop()
         logFile = SD.open(filename, FILE_WRITE);
       }
       
-      if(!logFile || !fileEnable) {
-//        oled.setCursor(0,6);
-//        oled.print("Can't open logfile");
-      } else {
+      if(logFile & fileEnable) {
         logFileOpened=true;
         digitalWrite(LED_PIN_NO, HIGH);
 #ifdef DEBUG_SERIAL
@@ -173,7 +161,7 @@ void doLogging()
 #endif
     if (logFileOpened == true) {
       logFile.print(strbuf);
-      logFile.flush();
+//      logFile.flush();
     }
   }
 }
@@ -195,25 +183,6 @@ void recvStr()
   strbuf[i] = '\0';  // \0: end of string
 }
 
-// get info from NMEA sentence
-//int strip_NMEA(const char *orig, int offset, int count)
-int strip_NMEA(char *orig, int offset, int count)
-{
-  char *str0, *s0;
-  int i, len;
-
-  for (i = 0; i < count; i++) {
-    str0 = orig + offset;
-    s0 = strchr(str0, ',');
-    len = strlen(str0) - strlen(s0);
-    strncpy(s1, str0, len); // len < BUF2SIZE +1 assumed
-    s1[len] = '\0';
-    offset += strlen(s1) + 1;
-  }
-
-  return offset;
-}
-
 bool checkSDFile()
 {
     for (unsigned int index = 0; index < 65535; index++) {
@@ -223,7 +192,7 @@ bool checkSDFile()
             logFile = SD.open(fileTmp, FILE_WRITE);
             Serial.println(fileTmp);
             if (logFile) {
-                Serial.println("Log file opend");
+                Serial.println("Log file opened");
                 strcpy(filename,fileTmp);
                 logFile.close();
                 return true;
@@ -233,27 +202,6 @@ bool checkSDFile()
         }
     }
     return false;
-}
-
-// send NMEA command with checksum to gps (hardware serial)
-void send_nmea_command(const char *p)
-{
-  uint8_t checksum = 0;
-  gps.print('$');
-  do {
-    char c = *p++;
-    if (c) {
-      checksum ^= (uint8_t)c;
-      gps.print(c);
-    }
-    else {
-      break;
-    }
-  }
-  while (1);
-  gps.print('*');
-  gps.println(checksum, HEX);
-  //  gps.print("\n\r");
 }
 
 void send_PUBX_packet(const char *p)
@@ -296,13 +244,12 @@ void configure_GP8013T()
   send_PUBX_packet("PUBX,40,GSA,0,5,0,0,0,0");
 }
 
-
-int mysubstr(char *t, const char *s, int pos, unsigned int len )
+void flushSD()
 {
-    if( pos < 0 || len > strlen(s) )
-        return -1;
-    for( s += pos; *s != '\0' && len > 0; len-- )
-        *t++ = *s++;
-    *t = '\0';
-    return 0;
+  if (logFileOpened == true) {
+    digitalWrite(LED_PIN_NO, LOW);
+    logFile.flush();
+    delay(500);
+    digitalWrite(LED_PIN_NO, HIGH);
+  }
 }
