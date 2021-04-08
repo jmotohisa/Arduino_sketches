@@ -67,7 +67,7 @@
 #define TimeZone (9)
 #define SW_PIN_NO 6
 #define LED_PIN_NO 7
-#define BUFSIZE 100
+#define BUFSIZE 120
 #define BUF2SIZE 12
 
 // initialize the library with the numbers of the interface pins
