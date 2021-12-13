@@ -18,7 +18,7 @@
 
 
 /// 独自の設定を行うクラスを、LGFX_Deviceから派生して作成します。
-class LGFX_ESP8266_SPI_ILI9341_XPT2046 : public lgfx::LGFX_Device
+class LGFX_ESP32_SPI_ILI9341_XPT2046 : public lgfx::LGFX_Device
 {
 /*
  クラス名は"LGFX"から別の名前に変更しても構いません。
@@ -64,7 +64,7 @@ public:
 
   // コンストラクタを作成し、ここで各種設定を行います。
   // クラス名を変更した場合はコンストラクタも同じ名前を指定してください。
-  LGFX_ESP8266_SPI_ILI9341_XPT2046(void)
+  LGFX_ESP32_SPI_ILI9341_XPT2046(void)
   {
     { // バス制御の設定を行います。
       auto cfg = _bus_instance.config();    // バス設定用の構造体を取得します。
@@ -72,14 +72,12 @@ public:
 // SPIバスの設定
       cfg.spi_mode = 0;             // SPI通信モードを設定 (0 ~ 3)
       cfg.spi_3wire  = false;       // 受信をMOSIピンで行う場合はtrueを設定
-      // cfg.freq_write = 40000000;    // 送信時のSPIクロック (最大80MHz, 80MHzを整数で割った値に丸められます) original
-         cfg.freq_write = 20000000;    // 送信時のSPIクロック (最大80MHz, 80MHzを整数で割った値に丸められます)
-      // cfg.freq_read  = 16000000;    // 受信時のSPIクロック, original
-         cfg.freq_read  =  8000000;    // 受信時のSPIクロック
-      cfg.pin_sclk = TFT_CLK;            // SPIのSCLKピン番号を設定
-      cfg.pin_mosi = TFT_MOSI;            // SPIのMOSIピン番号を設定
-      cfg.pin_miso = TFT_MISO;            // SPIのMISOピン番号を設定 (-1 = disable)
-      cfg.pin_dc   = TFT_DC;            // SPIのD/Cピン番号を設定  (-1 = disable)
+      cfg.freq_write = 40000000;    // 送信時のSPIクロック (最大80MHz, 80MHzを整数で割った値に丸められます) original
+      cfg.freq_read  = 16000000;    // 受信時のSPIクロック, original
+      cfg.pin_sclk = 18;            // SPIのSCLKピン番号を設定
+      cfg.pin_mosi = 23;            // SPIのMOSIピン番号を設定
+      cfg.pin_miso = 19;            // SPIのMISOピン番号を設定 (-1 = disable)
+      cfg.pin_dc   = 27;            // SPIのD/Cピン番号を設定  (-1 = disable)
      // SDカードと共通のSPIバスを使う場合、MISOは省略せず必ず設定してください。
 
       _bus_instance.config(cfg);    // 設定値をバスに反映します。
@@ -89,8 +87,8 @@ public:
     { // 表示パネル制御の設定を行います。
       auto cfg = _panel_instance.config();    // 表示パネル設定用の構造体を取得します。
 
-      cfg.pin_cs           =    TFT_CS;  // CSが接続されているピン番号   (-1 = disable)
-      cfg.pin_rst          =    TFT_RST;  // RSTが接続されているピン番号  (-1 = disable)
+      cfg.pin_cs           =    14;  // CSが接続されているピン番号   (-1 = disable)
+      cfg.pin_rst          =    33;  // RSTが接続されているピン番号  (-1 = disable)
       cfg.pin_busy         =    -1;  // BUSYが接続されているピン番号 (-1 = disable)
 
       // ※ 以下の設定値はパネル毎に一般的な初期値が設定されていますので、不明な項目はコメントアウトして試してみてください。
@@ -120,18 +118,17 @@ public:
       cfg.x_max      = 239;  // タッチスクリーンから得られる最大のX値(生の値)
       cfg.y_min      = 0;    // タッチスクリーンから得られる最小のY値(生の値)
       cfg.y_max      = 319;  // タッチスクリーンから得られる最大のY値(生の値)
-      cfg.pin_int    = TOUCH_IRQ;   // INTが接続されているピン番号
+      cfg.pin_int    = 22;   // INTが接続されているピン番号
       cfg.bus_shared = true; // 画面と共通のバスを使用している場合 trueを設定
       cfg.offset_rotation = 0;// 表示とタッチの向きのが一致しない場合の調整 0~7の値で設定
 
 // SPI接続の場合
-//      cfg.spi_host = VSPI_HOST;// 使用するSPIを選択 (HSPI_HOST or VSPI_HOST)
-//      cfg.freq = 1000000;     // SPIクロックを設定, original
-      cfg.freq = 500000;     // SPIクロックを設定
-//      cfg.pin_sclk = TOUCH_SCLK;     // SCLKが接続されているピン番号
-//      cfg.pin_mosi = TOUCH_DIN;     // MOSIが接続されているピン番号
-//      cfg.pin_miso = TOUCH_DOUT;     // MISOが接続されているピン番号
-      cfg.pin_cs   = TOUCH_CS;     //   CSが接続されているピン番号
+      cfg.spi_host = VSPI_HOST;// 使用するSPIを選択 (HSPI_HOST or VSPI_HOST)
+      cfg.freq = 1000000;     // SPIクロックを設定, original
+      cfg.pin_sclk = 18;     // SCLKが接続されているピン番号
+      cfg.pin_mosi = 23;     // MOSIが接続されているピン番号
+      cfg.pin_miso = 19;     // MISOが接続されているピン番号
+      cfg.pin_cs   = 5;     //   CSが接続されているピン番号
 
       _touch_instance.config(cfg);
       _panel_instance.setTouch(&_touch_instance);  // タッチスクリーンをパネルにセットします。
