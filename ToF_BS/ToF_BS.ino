@@ -6,12 +6,12 @@
 #include "M5StickC.h"
 #include <Wire.h>
 #include <VL53L0X.h>
-//#include "BluetoothSerial.h"
+#include "BluetoothSerial.h"
 
 VL53L0X sensor;
 TFT_eSprite img = TFT_eSprite(&M5.Lcd); 
 
-//BluetoothSerial SerialBT;
+BluetoothSerial SerialBT;
 
 void setup() {
   Serial.begin(115200);
@@ -20,7 +20,7 @@ void setup() {
   
   M5.begin();
 
-//  SerialBT.begin("M5StickC+ToF");
+  SerialBT.begin("M5StickC+ToF");
 
   img.createSprite(160, 80);
   img.fillSprite(BLACK);
@@ -52,6 +52,6 @@ void loop() {
   img.setCursor(10, 10);
   img.print(distance);
   img.pushSprite(0, 0);
-//  SerialBT.println(distance);
+  SerialBT.println(distance);
   delay(100);
 }
