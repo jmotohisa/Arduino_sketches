@@ -1,10 +1,13 @@
-// GPS Logger version 4.0
+// GPS Logger version 5.0
 
-/* with
-   u-Blox GM-8013T
-   SDcard
-   M096P4BL
-*/
+/* 
+ *  Arudino Mega 2560
+ *  with
+ *  u-Blox GM-8013T
+ *  SDcard
+ *  M096P4BL
+ *  
+ */
 
 /* note
   Arudino-SDcard
@@ -16,8 +19,8 @@
  ** CS - depends on your SD card shield or module. ->10
 */
 
-/* Arduino - GM-8013T (with software serial)
-    RX: 8 - 3 (TTL output)
+/* Arduino Mega 2560 - GM-8013T (with software serial)
+    RX: 11 - 3 (TTL output)
     TX: 9 - 4 (TTL input)
 */
 
@@ -52,9 +55,9 @@
 
 */
 
-//#define USE_SOFTWARE_SERIAL_MONITOR
+#define USE_SOFTWARE_SERIAL_MONITOR
 
-//#include <Wire.h>
+#include <Wire.h>
 #include <SPI.h>
 #include <SD.h>
 #include <SoftwareSerial.h>
@@ -71,7 +74,7 @@
 #define BUF2SIZE 12
 
 // initialize the library with the numbers of the interface pins
-SoftwareSerial gps(8, 9); // RX, TX
+SoftwareSerial gps(11, 9); // RX, TX
 
 // setup u8g object
 //U8GLIB_SSD1306_128X64 u8g(U8G_I2C_OPT_NONE | U8G_I2C_OPT_DEV_0); // I2C / TWI
@@ -103,8 +106,11 @@ void setup() {
   pinMode(SW_PIN_NO, INPUT_PULLUP ) ; // SW に接続し内部プルアップに設定
 
   // initialize OLED Display M096P4BL
-//  Wire.begin();
-//  Wire.setClock(400000L);
+  Serial.begin(115200);
+  Serial.println("GPS logger started.");
+  
+  Wire.begin();
+  Wire.setClock(400000L);
 #if RST_PIN >= 0
   oled.begin(&Adafruit128x64, I2C_ADDRESS, RST_PIN);
 #else // RST_PIN >= 0
@@ -124,6 +130,7 @@ void setup() {
   configure_GP8013T();
   
   oled.print("GPS ready");
+  Serial.println("GPS ready");
 
   delay(1000);
   
@@ -135,10 +142,14 @@ void setup() {
   pinMode(SD_CHIP_SELECT, OUTPUT);
   if (SD.begin(SD_CHIP_SELECT)) {
     fileEnable = checkSDFile();
+    Serial.println("SD begin succeeded.");
+    Serial.print("file name:");
+    Serial.println(filename);
   } else {
     oled.setCursor(0,6);
 //    oled.clearToEOL();
     oled.println("SD begin failed.");
+    Serial.println("SD begin failed.");
     fileEnable=false;
   }
   logFileOpened=false;
@@ -201,6 +212,7 @@ void doLogging()
   if (gps.available()) {  // if recived serial signal
 //    digitalWrite(LED_PIN_NO,HIGH);
     recvStr();   // read serial data to string buffer
+    Serial.print(strbuf);
     if (logFileOpened == true) {
       logFile.print(strbuf);
       logFile.flush();
