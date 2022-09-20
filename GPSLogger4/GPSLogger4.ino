@@ -56,7 +56,7 @@
 */
 
 // uncomment if debug and use serial
-//#define DEBUG_SERIAL
+#define DEBUG_SERIAL
 
 // uncomment if flush timer enable
 #define FLUSH_TIMER_ENABLE
@@ -88,8 +88,8 @@
 #define TimeZone (9)
 #define SW_PIN_NO 6
 #define LED_PIN_NO 7
-#define BUFSIZE 120
-#define BUF2SIZE 12
+#define BUFSIZE 256
+#define BUF2SIZE 100
 
 #ifdef USE_TINYGPS
   TinyGPSPlus tinyGps;
@@ -225,8 +225,9 @@ do {
     
     gpsDate(utcDate);
     gpsTime(utcTime);
+    break;
   }
-} while(0);
+} while(1);
   #endif
 
 // initialize SD card
@@ -345,7 +346,7 @@ void doLogging()
 
       gpsDate(utcDate);
       gpsTime(utcTime);
-      UCTtoLT();
+      UTCtoLT();
       sprintf(localDate0, "%02d/%02d/%02d", gpsYear,gpsMonth,gpsDay);
       sprintf(localTime0, "%02d:%02d:%02d", gpsHour,gpsMin,gpsSec);
 
@@ -361,6 +362,13 @@ void doLogging()
         oled.setCursor(0,4);
         oled.print(WE);
         oled.print(longtude);
+#ifdef DEBUG_SERIAL
+        Serial.print(NS);
+        Serial.print(latitude);
+        Serial.print(" ");
+        Serial.print(WE);
+        Serial.println(longtude);
+#endif
       } else {
         oled.setCursor(0,2);
         oled.print("GPS invalid");
@@ -505,12 +513,22 @@ void configure_GP8013T()
   // output rate on SPI
   // 0 (reserved)
   // and "*" + checksum + CRLF
-  send_PUBX_packet("PUBX,40,RMC,0,INTERVAL,0,0,0,0");
-  send_PUBX_packet("PUBX,40,VTG,0,INTERVAL,0,0,0,0");
-  send_PUBX_packet("PUBX,40,GGA,0,INTERVAL,0,0,0,0");
-  send_PUBX_packet("PUBX,40,GSV,0,INTERVAL,0,0,0,0");
-  send_PUBX_packet("PUBX,40,GLL,0,INTERVAL,0,0,0,0");
-  send_PUBX_packet("PUBX,40,GSA,0,INTERVAL,0,0,0,0");
+
+  /*
+  sprintf(strbuf,"PUBX,40,RMC,0,%d,0,0,0,0",INTERVAL);send_PUBX_packet(strbuf);Serial.println(strbuf);
+  sprintf(strbuf,"PUBX,40,VTG,0,%d,0,0,0,0",INTERVAL);send_PUBX_packet(strbuf);Serial.println(strbuf);
+  sprintf(strbuf,"PUBX,40,GGA,0,%d,0,0,0,0",INTERVAL);send_PUBX_packet(strbuf);Serial.println(strbuf);
+  sprintf(strbuf,"PUBX,40,GSV,0,%d,0,0,0,0",INTERVAL);send_PUBX_packet(strbuf);Serial.println(strbuf);
+  sprintf(strbuf,"PUBX,40,GLL,0,%d,0,0,0,0",INTERVAL);send_PUBX_packet(strbuf);Serial.println(strbuf);
+  sprintf(strbuf,"PUBX,40,GSA,0,%d,0,0,0,0",INTERVAL);send_PUBX_packet(strbuf);Serial.println(strbuf);
+*/
+  send_PUBX_packet("PUBX,40,RMC,0,5,0,0,0,0");
+  send_PUBX_packet("PUBX,40,VTG,0,5,0,0,0,0");
+  send_PUBX_packet("PUBX,40,GGA,0,5,0,0,0,0");
+  send_PUBX_packet("PUBX,40,GSV,0,5,0,0,0,0");
+  send_PUBX_packet("PUBX,40,GLL,0,5,0,0,0,0");
+  send_PUBX_packet("PUBX,40,GSA,0,5,0,0,0,0");
+
 }
 
 void dateTime(uint16_t* date, uint16_t* time)
@@ -568,7 +586,7 @@ void gpsDate(const char *utcDate)
   }
 */
 
-void UCTtoLT()
+void UTCtoLT()
 {
 //  int leap = (gpsYear % 4) * 4 / gpsYear - (gpsYear % 100) * 100 / gpsYear + (gpsYear % 400) * 400 / gpsYear ;
   int leap = (gpsYear / 4) * 4 / gpsYear ;
@@ -636,7 +654,7 @@ bool setFileName()
     Serial.print("UTC:");
     Serial.println(tmp);
 #endif
-    UCTtoLT();
+    UTCtoLT();
 #ifdef DEBUG_SERIAL
     sprintf(tmp,"%d/%d/%d",gpsYear,gpsMonth,gpsDay);
     Serial.print("local time:");
@@ -655,7 +673,7 @@ bool setFileName()
     Serial.print("UTC:");
     Serial.println(tmp);
 #endif
-    UCTtoLT();
+    UTCtoLT();
 #ifdef DEBUG_SERIAL
     sprintf(tmp,"%d/%d/%d",gpsYear,gpsMonth,gpsDay);
     Serial.print("local time:");
