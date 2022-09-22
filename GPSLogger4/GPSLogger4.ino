@@ -130,6 +130,7 @@ void setup() {
   char statGPS[2];
  // char GPSStr[7];
   char localTime0[9], localDate0[9];
+  char *strbuf2;
 
   pinMode(LED_PIN_NO, OUTPUT) ;      // LEDに接続
   pinMode(SW_PIN_NO, INPUT_PULLUP ) ; // SW に接続し内部プルアップに設定
@@ -205,22 +206,22 @@ do {
   #ifdef DEBUG_SERIAL
      Serial.print(strbuf);
   #endif
-  offset = strip_NMEA(strbuf, 0, 1);
-  //      strcpy(GPSStr,s1);
-  if (strcmp(s1, "$GNRMC") == 0) { // if RMC line
-    offset = strip_NMEA(strbuf, offset, 1); // utcTime
+  strbuf2=strstr(strbuf,"$GNRMC");
+  if (strbuf2) { // if RMC line
+    offset = strip_NMEA(strbuf2, 0, 1); // s1 should should be $GNRMC
+    offset = strip_NMEA(strbuf2, offset, 1); // utcTime
     strcpy(utcTime, s1);
-    offset = strip_NMEA(strbuf, offset, 1); // status
+    offset = strip_NMEA(strbuf2, offset, 1); // status
     strcpy(statGPS, s1);
-    offset = strip_NMEA(strbuf, offset, 1); // latitue
+    offset = strip_NMEA(strbuf2, offset, 1); // latitue
     strcpy(latitude, s1);
-    offset = strip_NMEA(strbuf, offset, 1); // N/W
+    offset = strip_NMEA(strbuf2, offset, 1); // N/W
     strcpy(NS, s1);
-    offset = strip_NMEA(strbuf, offset, 1); // longitude
+    offset = strip_NMEA(strbuf2, offset, 1); // longitude
     strcpy(longtude, s1);
-    offset = strip_NMEA(strbuf, offset, 1); // W/E
+    offset = strip_NMEA(strbuf2, offset, 1); // W/E
     strcpy(WE, s1);
-    offset = strip_NMEA(strbuf, offset, 3); // utcDate
+    offset = strip_NMEA(strbuf2, offset, 3); // utcDate
     strcpy(utcDate, s1);
     
     gpsDate(utcDate);
@@ -311,6 +312,7 @@ void doLogging()
  // char GPSStr[7];
   char localTime0[9], localDate0[9];
   int offset;
+  char *strbuf2;
 
   if (gps.available()) {  // if recived serial signal
 //    digitalWrite(LED_PIN_NO,HIGH);
@@ -321,14 +323,13 @@ void doLogging()
     if (logFileOpened == true) {
       logFile.print(strbuf);
       logFile.flush();
-    } else {
-  }
-//    digitalWrite(LED_PIN_NO,LOW);
+    }
+    //    digitalWrite(LED_PIN_NO,LOW);
 
     // Display date/time/latitude/longitude
-    offset = strip_NMEA(strbuf, 0, 1);
-    //      strcpy(GPSStr,s1);
-    if (strcmp(s1, "$GNRMC") == 0) { // if RMC line
+    strbuf2=strstr(strbuf,"$GNRMC");
+    if (strbuf2) { // if RMC line
+      offset = strip_NMEA(strbuf2, 0, 1); // s1 should should be $GNRMC
       offset = strip_NMEA(strbuf, offset, 1); // utcTime
       strcpy(utcTime, s1);
       offset = strip_NMEA(strbuf, offset, 1); // status
