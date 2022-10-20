@@ -1,4 +1,4 @@
-// GPS Logger4 version 2
+// GPS Logger4 version 2.1
 
 /* 
  *  Arudino Mega 2560
@@ -19,7 +19,12 @@
  ** CS - depends on your SD card shield or module. ->10
 */
 
-/* Arduino Mega 2560 - GM-8013T (with software serial)
+/* Arduino Mega 2560 - GM-8013T
+ Hardware Serial (Serial 1)
+  RX: 19 - 3 (TTL output)
+  TX: 18 - 4 (TTL input)
+  
+ (previously, SoftwareSerial)
     RX: 11 - 3 (TTL output)
     TX: 9 - 4 (TTL input)
 */
@@ -73,10 +78,12 @@
 #ifdef USE_TINYGPS
   #include <TinyGPS++.h>
 #endif
+/*
 #include <SoftwareSerial.h>
 #ifndef STM32duino
   #include <SoftwareSerial.h>
 #endif
+*/
 #ifdef FLUSH_TIMER_ENABLE
     #include <MsTimer2.h>
 #endif
@@ -96,7 +103,8 @@
 #endif
 
 // initialize the library with the numbers of the interface pins
-SoftwareSerial gps(11, 9); // RX, TX
+// SoftwareSerial gps(11, 9); // RX, TX
+#define gps Serial1
 
 // setup u8g object
 //U8GLIB_SSD1306_128X64 u8g(U8G_I2C_OPT_NONE | U8G_I2C_OPT_DEV_0); // I2C / TWI
