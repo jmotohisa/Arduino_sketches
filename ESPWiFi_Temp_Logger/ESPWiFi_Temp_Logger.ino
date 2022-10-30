@@ -1,13 +1,21 @@
 /*
   ESPWiFi_Temp_Logger.ino
 */
+
+/*
+ * Hardware
+ *  ESP32 DevKit
+ *  MAX6675 thermocouple module
+ *  ILI9341 LCD module (with SD and XPT2046 Touchscreen)
+ *  DS1307 RTC module (with I2C level converter)
+*/
   
 /*
-  MAX31855 熱電対センサの値を10分ごとにSDカードに記録する
+  MAX31855/MAX6675 熱電対センサの値を10分ごとにSDカードに記録する
   記録したデータはHTTPを立てて外部からブラウザ経由で見れる
 
- based on Swich Science ESPWiFI_SD_Logger
- http://mag.switch-science.com/
+  based on Swich Science ESPWiFI_SD_Logger
+  http://mag.switch-science.com/
 
   SDcardディレクトリの中身をESP-WROOM-02に接続するSDカードのルートディレクトリにコピーしてください
 */
@@ -17,9 +25,12 @@
 #include <Adafruit_GFX.h>
 #include <SPI.h>
 #include <Adafruit_ILI9341.h>
-#include <Adafruit_MAX31855.h>
+//#include <Adafruit_MAX31855.h>
+#include "JM_MAX6675.h"
 #include <XPT2046_Touchscreen.h>
 #include <SD.h>
+#include <Wire.h>
+#include "RTClib.h"
 //#include "BluetoothSerial.h"
 
 //BluetoothSerial SerialBT;
@@ -34,8 +45,8 @@
 #define UTC_TOKYO +9
 
 #ifndef STASSID
-#define STASSID "0024A5B58F84"
-#define STAPSK  "fncu4tredt6rf"
+#define STASSID ""
+#define STAPSK  ""
 #endif
 
 const char* ssid = STASSID;
@@ -47,9 +58,17 @@ EPS32 | MAX31885 peripheral
 --------|---------
 18      | 4 (SCK)
 19      | 3 (MISO)
-21      | 1 (SS)
+16      | 1 (SS)
 GND     | 5 (GND)
 3V3     | 6 (VCC)
+
+ESP32 | MAX 6675
+------|------
+19 | MISO
+16 | SS
+18 | SCK
+3V3 | VCC
+GND | GND
 
 ILI9341 module | EPS32
 -------|---------------
@@ -72,6 +91,12 @@ R1 (CS)     | 17
 R2 (MOSI)   | MOSI
 R3 (MISO)   | MISO
 R4(J4) (SCK)    | SCK
+
+RTC DS1307 (via level converter) | ESP32
+SCL | 22
+SDA | 21
+
+
  */
 #define TFT_CS 14
 #define TFT_RST 33
@@ -84,11 +109,11 @@ R4(J4) (SCK)    | SCK
 #define TOUCH_CS 5
 #define TOUCH_DIN TFT_MOSI
 #define TOUCH_DOUT TFT_MISO
-#define TOUCH_IRQ 22
+#define TOUCH_IRQ 4
 
 #define MAXCLK  TFT_CLK
 #define MAXDO   TFT_MISO
-#define MAXCS   21
+#define MAXCS   16
 
 #define SD_CS 17
 #define SD_MOSI TFT_MOSI
@@ -101,7 +126,11 @@ Adafruit_ILI9341 tft = Adafruit_ILI9341(TFT_CS, TFT_DC,TFT_RST);
 XPT2046_Touchscreen ts = XPT2046_Touchscreen(TOUCH_CS);
 
 // initialize the Thermocouple
-Adafruit_MAX31855 thermocouple(MAXCS);
+//Adafruit_MAX31855 thermocouple(MAXCS);
+JM_MAX6675 thermocouple(MAXCS);
+
+
+RTC_DS1307 RTC;
 
 int xmin,xmax,ymin,ymax;
 int i=0;
@@ -127,6 +156,7 @@ SDlogger sd;
 void setup()
 {
   Serial.begin(115200);
+  Wire.begin();
   Serial.println();
   Serial.println();
 
@@ -134,8 +164,6 @@ void setup()
   Serial.print("Connecting to ");
   Serial.println(ssid);
   WiFi.begin(ssid, pass);
-
-  setSDStatus(sd.init());
 
   while (WiFi.status() != WL_CONNECTED) {
     delay(500);
@@ -149,12 +177,22 @@ void setup()
 
   ntp.udpSetup();
   WifiServerinit();
+
+  if(!RTC.begin())
+    Serial.println("RTC not working. Skipping...");
+  else
+    if (! RTC.isrunning()) {
+      Serial.println("RTC is NOT running! Reset date");
+    // following line sets the RTC to the date & time this sketch was compiled
+    RTC.adjust(DateTime(F(__DATE__), F(__TIME__)));
+//    RTC.adjust(ntp.getTime(&unixtime));
+  }
   
   Serial.println("MAX31855 test");
   // wait for MAX chip to stabilize
   delay(500);
   Serial.print("Initializing sensor...");
-//  CS_MAX31855();
+  
   if (!thermocouple.begin()) {
     Serial.println("ERROR.");
     while (1) delay(10);
@@ -168,6 +206,8 @@ void setup()
   tft.setRotation(1);
   ts.setRotation(1);
   
+  setSDStatus(sd.init());
+
   int w=tft.width(),h=tft.height();
   xmin=30;
   xmax=w;
@@ -186,6 +226,8 @@ void setup()
 void loop()
 {
   double c;
+  DateTime now = RTC.now(); 
+  
   handleClient();
   // 約50日ごとにおこるオーバーフロー時はmillsが0になるので引き算の結果はマイナス
   // とりうる値の範囲を考慮して割り算した結果同士を比較 (4,294,967,295)
@@ -278,12 +320,99 @@ void loop()
     prev_x = prev_y = 0xffff;
   }
   */
+    {
+      whenCountStarted = millis();
+      
+      // 時間を取得
+      if((ntpAccsessTimes==0) && (ntp.getTime(&unixtime)))
+	{
+	  ntpAccsessTimes++;
+	  if(ntpAccsessTimes >= 480){ ntpAccsessTimes = 0;} // 48回に1回のアクセスとする: 8時間に1回
+	}else{
+	//時刻取得に失敗 or 取得タイミングでなかったら前回の値から測定間隔分だけ秒数を足す
+	unixtime += period/1000;
+      }
+      time_t t = unixtime + (UTC_TOKYO * 60 * 60); // 日本標準時に調整
+      sprintf(date_ym, "%04d-%02d", year(t), month(t));
+      sprintf(date_mdhm, "%2d/%02d-%02d:%02d", month(t), day(t),hour(t), minute(t));
+      Serial.println(date_ym);
+      Serial.println(date_mdhm);
+      
+      // センサからデータを取得
+      tft.setTextColor(ILI9341_WHITE);tft.setTextSize(2);
+      /*
+	double c1=thermocouple.readInternal();
+	Serial.print("Internal Temp = ");
+	Serial.println(c1);
+	//  SerialBT.println(c1);
+	tft.setCursor(0,0);
+	tft.print("Internal Temp = ");
+	tft.setCursor(12*17,0);tft.print("     ");
+	tft.setCursor(12*17,0);tft.print(c);
+      */
+      c = thermocouple.readCelsius();
+      
+      tft.setCursor(0,17);tft.print("                            ");
+      tft.setCursor(0,17);
+      if (isnan(c)) {
+	Serial.println("Something wrong with thermocouple!");
+	tft.println("Something wrong with thermocouple!");     
+      } else {
+	Serial.print("C = ");
+	Serial.println(c);
+	tft.print("C =      ");
+	tft.setCursor(12*4,17);
+	tft.print(c);
+      }
+      
+      int x=i%(xmax-xmin)+xmin;
+      int y=(c-Tmin)/(Tmax-Tmin)*(ymax-ymin)+ymin;
+      tft.fillCircle(x,y,3,ILI9341_CYAN);
+      i+=5;
+      if(i>xmax)
+	i=0;
+      
+      // SDカードにデータを記録
+      // データを記録するファイル名の指定
+      // ファイル名8文字+拡張子3文字までなので注意
+      String fileName = "/";
+      fileName += String(date_ym);
+      fileName +=  ".csv";
+      Serial.println(fileName);
+      // 記録するデータの生成
+      String dataStream = "";
+      dataStream += String(date_mdhm);
+      dataStream += String(',');
+      dataStream += String(c);
+      dataStream += String(',');
+      dataStream += String(c);
+      dataStream += String(',');
+      dataStream += String('0');
+      sd.recordData(fileName,dataStream);
+    }
+  
+  if (ts.touched()) {
+    TS_Point p = ts.getPoint();
+    //   uint16_t x, y;
+    //   ts.getPosition(x, y);
+    /*
+      if (prev_x == 0xffff) {
+      ucg.drawPixel(x, y);
+      } else {
+      ucg.drawLine(prev_x, prev_y, x, y);
+      }
+      prev_x = x;
+      prev_y = y;
+      } else {
+      prev_x = prev_y = 0xffff;
+      }
+    */
     Serial.print("x=");
     Serial.println(p.x);
     Serial.print("y=");
     Serial.println(p.y);
   }
-
+  
 }
 
 void checkFile(char *fileName)

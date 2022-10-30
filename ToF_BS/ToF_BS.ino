@@ -15,11 +15,12 @@ BluetoothSerial SerialBT;
 
 void setup() {
   Serial.begin(115200);
-  Wire.begin(0, 26, 100000);
+//  Wire.begin(0, 26, 100000);
+  Wire.begin(0,26);
   
   M5.begin();
 
-  SerialBT.begin("ESP32");
+  SerialBT.begin("M5StickC+ToF");
 
   img.createSprite(160, 80);
   img.fillSprite(BLACK);
@@ -38,7 +39,7 @@ void setup() {
   // fast as possible).  To use continuous timed mode
   // instead, provide a desired inter-measurement period in
   // ms (e.g. sensor.startContinuous(100)).
-  sensor.startContinuous();
+  sensor.startContinuous(100);
 
 }
 
@@ -52,4 +53,5 @@ void loop() {
   img.print(distance);
   img.pushSprite(0, 0);
   SerialBT.println(distance);
+  delay(100);
 }

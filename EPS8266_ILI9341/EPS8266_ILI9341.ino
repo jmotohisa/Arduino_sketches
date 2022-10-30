@@ -20,8 +20,8 @@
 
 /*
 #ifndef STASSID
-#define STASSID "0024A5B58F84"
-#define STAPSK  "fncu4tredt6rf"
+#define STASSID ""
+#define STAPSK  ""
 #endif
 
 const char* ssid = STASSID;

@@ -1,0 +1,72 @@
+// https://github.com/m5stack/M5StickC/blob/master/examples/Hat/TOF/TOF.ino
+
+// please install vl53l0x lib first (https://github.com/pololu/vl53l0x-arduino)
+// lib in Sketch->Includ Library->Library Manager, search for vl53l0x, Author: pololu
+
+#include "M5StickC.h"
+#include <Wire.h>
+#include <VL53L0X.h>
+#include "BluetoothSerial.h"
+
+VL53L0X sensor;
+TFT_eSprite img = TFT_eSprite(&M5.Lcd); 
+
+BluetoothSerial SerialBT;
+
+void setup() {
+  Serial.begin(115200);
+<<<<<<< HEAD
+  Wire.begin(0, 26, 100000);
+  
+  M5.begin();
+
+  SerialBT.begin("ESP32");
+=======
+//  Wire.begin(0, 26, 100000);
+  Wire.begin(0,26);
+  
+  M5.begin();
+
+  SerialBT.begin("M5StickC+ToF");
+>>>>>>> a24fcfdb8268ef9335cb30f745762fe7ae6594f2
+
+  img.createSprite(160, 80);
+  img.fillSprite(BLACK);
+  img.setTextColor(WHITE);
+  img.setTextSize(2);
+
+  sensor.setTimeout(500);
+  if (!sensor.init()) {
+    img.setCursor(10, 10);
+    img.print("Failed");
+    img.pushSprite(0, 0);
+    Serial.println("Failed to detect and initialize sensor!");
+    while (1) {}
+  }
+  // Start continuous back-to-back mode (take readings as
+  // fast as possible).  To use continuous timed mode
+  // instead, provide a desired inter-measurement period in
+  // ms (e.g. sensor.startContinuous(100)).
+<<<<<<< HEAD
+  sensor.startContinuous();
+=======
+  sensor.startContinuous(100);
+>>>>>>> a24fcfdb8268ef9335cb30f745762fe7ae6594f2
+
+}
+
+void loop() {
+  uint16_t distance = sensor.readRangeContinuousMillimeters();
+  Serial.print(distance);
+  if (sensor.timeoutOccurred()) { Serial.print(" TIMEOUT"); }
+  Serial.println();
+  img.fillSprite(BLACK);
+  img.setCursor(10, 10);
+  img.print(distance);
+  img.pushSprite(0, 0);
+  SerialBT.println(distance);
+<<<<<<< HEAD
+=======
+  delay(100);
+>>>>>>> a24fcfdb8268ef9335cb30f745762fe7ae6594f2
+}
