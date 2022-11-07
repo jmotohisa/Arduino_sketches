@@ -8,14 +8,14 @@
  *  MAX6675 thermocouple module
  *  ILI9341 LCD module (with SD and XPT2046 Touchscreen)
  *  DS1307 RTC module (with I2C level converter)
- */
+*/
   
 /*
   MAX31855/MAX6675 熱電対センサの値を10分ごとにSDカードに記録する
   記録したデータはHTTPを立てて外部からブラウザ経由で見れる
 
- based on Swich Science ESPWiFI_SD_Logger
- http://mag.switch-science.com/
+  based on Swich Science ESPWiFI_SD_Logger
+  http://mag.switch-science.com/
 
   SDcardディレクトリの中身をESP-WROOM-02に接続するSDカードのルートディレクトリにコピーしてください
 */
@@ -95,6 +95,7 @@ R4(J4) (SCK)    | SCK
 RTC DS1307 (via level converter) | ESP32
 SCL | 22
 SDA | 21
+
 
  */
 #define TFT_CS 14
@@ -191,7 +192,7 @@ void setup()
   // wait for MAX chip to stabilize
   delay(500);
   Serial.print("Initializing sensor...");
-
+  
   if (!thermocouple.begin()) {
     Serial.println("ERROR.");
     while (1) delay(10);
@@ -232,6 +233,93 @@ void loop()
   // とりうる値の範囲を考慮して割り算した結果同士を比較 (4,294,967,295)
   if((signed long)(millis()/1000000 - whenCountStarted/1000000) < 0){whenCountStarted = millis();}
   if((millis() - whenCountStarted) > period)
+  {
+    whenCountStarted = millis();
+
+    // 時間を取得
+    if((ntpAccsessTimes==0) && (ntp.getTime(&unixtime)))
+    {
+      ntpAccsessTimes++;
+      if(ntpAccsessTimes >= 480){ ntpAccsessTimes = 0;} // 48回に1回のアクセスとする: 8時間に1回
+    }else{
+      //時刻取得に失敗 or 取得タイミングでなかったら前回の値から測定間隔分だけ秒数を足す
+      unixtime += period/1000;
+    }
+    time_t t = unixtime + (UTC_TOKYO * 60 * 60); // 日本標準時に調整
+    sprintf(date_ym, "%04d-%02d", year(t), month(t));
+    sprintf(date_mdhm, "%2d/%02d-%02d:%02d", month(t), day(t),hour(t), minute(t));
+    Serial.println(date_ym);
+    Serial.println(date_mdhm);
+
+    // センサからデータを取得
+
+  double c1=thermocouple.readInternal();
+  Serial.print("Internal Temp = ");
+  Serial.println(c1);
+//  SerialBT.println(c1);
+  tft.setTextColor(ILI9341_WHITE);tft.setTextSize(2);
+  tft.setCursor(0,0);
+  tft.print("Internal Temp = ");
+  tft.setCursor(12*17,0);tft.print("     ");
+  tft.setCursor(12*17,0);tft.print(c1);
+
+   c = thermocouple.readCelsius();
+
+   tft.setCursor(0,17);tft.print("                            ");
+   tft.setCursor(0,17);
+   if (isnan(c)) {
+     Serial.println("Something wrong with thermocouple!");
+     tft.println("Something wrong with thermocouple!");     
+   } else {
+     Serial.print("C = ");
+     Serial.println(c);
+     tft.print("C =      ");
+     tft.setCursor(12*4,17);
+     tft.print(c);
+   }
+
+   int x=i%(xmax-xmin)+xmin;
+   int y=(c-Tmin)/(Tmax-Tmin)*(ymax-ymin)+ymin;
+   tft.fillCircle(x,y,3,ILI9341_CYAN);
+   i+=5;
+   if(i>xmax)
+    i=0;
+    
+    // SDカードにデータを記録
+    // データを記録するファイル名の指定
+    // ファイル名8文字+拡張子3文字までなので注意
+    String fileName = "/";
+    fileName += String(date_ym);
+    fileName +=  ".csv";
+    Serial.println(fileName);
+    // 記録するデータの生成
+    String dataStream = "";
+    dataStream += String(date_mdhm);
+    dataStream += String(',');
+    dataStream += String(c);
+    dataStream += String(',');
+    dataStream += String(c1);
+    dataStream += String(',');
+    dataStream += String('0');
+    sd.recordData(fileName,dataStream);
+  }
+
+  if (ts.touched()) {
+    TS_Point p = ts.getPoint();
+ //   uint16_t x, y;
+ //   ts.getPosition(x, y);
+/*
+    if (prev_x == 0xffff) {
+      ucg.drawPixel(x, y);
+    } else {
+      ucg.drawLine(prev_x, prev_y, x, y);
+    }
+    prev_x = x;
+    prev_y = y;
+  } else {
+    prev_x = prev_y = 0xffff;
+  }
+  */
     {
       whenCountStarted = millis();
       
