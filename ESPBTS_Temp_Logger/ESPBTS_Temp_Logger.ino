@@ -49,7 +49,7 @@ BluetoothSerial SerialBT;
   3V3 | VCC
   GND | GND
   
-  ILI9341 module | EPS32
+  ILI9341 module | ESP32
   -------|---------------
   1 (VCC)    | 3V3
   2 (GND)    | GND

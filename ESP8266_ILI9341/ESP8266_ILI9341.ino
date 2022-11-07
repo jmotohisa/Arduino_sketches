@@ -1,12 +1,12 @@
 /*
-  Control test of ILI9341 with EPS8266 using SPI
+  Control test of ILI9341 with ESP8266 using SPI
   taken from https://qiita.com/toyoshim/items/84c026e97f6be200cb19
 */
 
 #include <ESP8266WiFi.h>
 
 /*
- * ILI9341   - EPS8266
+ * ILI9341   - ESP8266
  * VCC
  * GND
  * CS        - GPIO15 (CS, D8)

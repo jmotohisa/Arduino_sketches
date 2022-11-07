@@ -54,7 +54,7 @@ const char* pass = STAPSK;
 
 // Wiring
 /*
-EPS32 | MAX31885 peripheral
+ESP32 | MAX31885 peripheral
 --------|---------
 18      | 4 (SCK)
 19      | 3 (MISO)
@@ -70,7 +70,7 @@ ESP32 | MAX 6675
 3V3 | VCC
 GND | GND
 
-ILI9341 module | EPS32
+ILI9341 module | ESPP32
 -------|---------------
 1 (VCC)    | 3V3
 2 (GND)    | GND
