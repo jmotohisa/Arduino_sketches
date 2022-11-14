@@ -123,9 +123,9 @@ SDA | 21
 // Use hardware SPI (on Uno, #13, #12, #11) and the above for CS/DC
 Adafruit_ILI9341 tft = Adafruit_ILI9341(TFT_CS, TFT_DC,TFT_RST);
 
-XPT2046_Touchscreen ts = XPT2046_Touchscreen(TOUCH_CS);
-//XPT2046_Touchscreen ts(TOUCH_CS, TOUCH_IRQ);  // Param 2 - Touch IRQ Pin - interrupt enabled polling
-//XPT2046_Touchscreen ts= XPT2046_Touchscreen(TOUCH_CS, TOUCH_IRQ);  // Param 2 - Touch IRQ Pin - interrupt enabled polling
+// XPT2046_Touchscreen ts = XPT2046_Touchscreen(TOUCH_CS);
+// XPT2046_Touchscreen ts(TOUCH_CS, TOUCH_IRQ);  // Param 2 - Touch IRQ Pin - interrupt enabled polling
+XPT2046_Touchscreen ts= XPT2046_Touchscreen(TOUCH_CS, TOUCH_IRQ);  // Param 2 - Touch IRQ Pin - interrupt enabled polling
 
 // initialize the Thermocouple
 //Adafruit_MAX31855 thermocouple(MAXCS);
@@ -228,7 +228,7 @@ void loop()
 {
   double c;
   DateTime now = RTC.now(); 
-  
+
   handleClient();
   // 約50日ごとにおこるオーバーフロー時はmillsが0になるので引き算の結果はマイナス
   // とりうる値の範囲を考慮して割り算した結果同士を比較 (4,294,967,295)
@@ -318,7 +318,8 @@ void loop()
   }
   */
   
-//  if (ts.tirqTouched()) {
+  if (ts.tirqTouched()) {
+    Serial.println("Touch Int accepted.");
     if (ts.touched()) {
       TS_Point p = ts.getPoint();
       //   uint16_t x, y;
@@ -335,13 +336,14 @@ void loop()
       prev_x = prev_y = 0xffff;
       }
     */
-    Serial.print("x=");
-    Serial.println(p.x);
-    Serial.print("y=");
+    Serial.print("Pressure = ");
+    Serial.print(p.z);
+    Serial.print(", x = ");
+    Serial.print(p.x);
+    Serial.print(", y = ");
     Serial.println(p.y);
   }
-//  }
-
+  }
 }
 
 void checkFile(char *fileName)

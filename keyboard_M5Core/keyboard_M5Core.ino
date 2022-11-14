@@ -1,7 +1,5 @@
-#include "LGFX_ESP32_SPI_ILI9341_XPT2046.hpp"
+#include <M5Core2.h>
 #include <Free_Fonts.h>
-
-LGFX_ESP32_SPI_ILI9341_XPT2046 lcd;
 
 #define KEYBOARD_X (2)
 #define KEYBOARD_Y (26)
@@ -50,35 +48,31 @@ typedef enum {
 String input_text;
 key_mode_t key_mode = KEY_MODE_LETTER;
 bool shift_mode = false;
-// M5Touch *touch_button_list[COLS*ROWS];
+M5Touch *touch_button_list[COLS*ROWS];
 
 void initKeyboard(void);
 void drawKeyboard(void);
-// void buttonEvent(TouchEvent& e);
+void buttonEvent(TouchEvent& e);
 
 void initKeyboard()
 {
-  lcd.setRotation(1);
-  lcd.fillScreen(TFT_BLACK);
-  lcd.setTextSize(1);
-  lcd.setTextColor(TFT_GREEN, TFT_BLACK);
-  lcd.setFreeFont(FF1);
+  M5.Lcd.fillScreen(TFT_BLACK);
+  M5.Lcd.setTextSize(1);
+  M5.Lcd.setTextColor(TFT_GREEN, TFT_BLACK);
+  M5.Lcd.setFreeFont(FF1);
 
-/*
   // Button A
-  lcd.drawString("back", 40, 225, 2);
+  M5.Lcd.drawString("back", 40, 225, 2);
   // Button B
-  lcd.drawString("done", 145, 225, 2);
+  M5.Lcd.drawString("done", 145, 225, 2);
   // Button C
-  lcd.drawString("mode", 250, 225, 2);
+  M5.Lcd.drawString("mode", 250, 225, 2);
 
-  lcd.Touch.addHandler(buttonEvent, TE_BTNONLY + TE_TOUCH);
-
-  */
+  M5.Touch.addHandler(buttonEvent, TE_BTNONLY + TE_TOUCH);
   // Clear button list
   for(int i = 0; i < COLS*ROWS; i++)
   {
-//    touch_button_list[i] = NULL;
+    touch_button_list[i] = NULL;
   }
   key_mode = KEY_MODE_LETTER;
   shift_mode = false;
@@ -96,8 +90,8 @@ void drawKeyboard()
     {
       x = (KEYBOARD_X + (c * KEY_W));
       y = (KEYBOARD_Y + (r * KEY_H));
-      lcd.fillRect(x + 1, y + 1, KEY_W - 2, KEY_H - 2, TFT_BLACK);
-      lcd.drawRoundRect(x, y, KEY_W, KEY_H, 10, TFT_DARKGREY);
+      M5.Lcd.fillRect(x + 1, y + 1, KEY_W - 2, KEY_H - 2, TFT_BLACK);
+      M5.Lcd.drawRoundRect(x, y, KEY_W, KEY_H, 10, TFT_DARKGREY);
 
       int key_page = 0;
 
@@ -109,27 +103,26 @@ void drawKeyboard()
 
       if(ch == '\002')  // Shift
       {
-        lcd.setFreeFont(FF0);
+        M5.Lcd.setFreeFont(FF0);
         key = "shift";
-        lcd.drawString(key, x + 9, y + 28);
+        M5.Lcd.drawString(key, x + 9, y + 28);
       }
       else
       {
-        lcd.setFreeFont(FF3);
+        M5.Lcd.setFreeFont(FF3);
         key = String(ch);
-        lcd.drawString(key, x + 12, y + 12);
+        M5.Lcd.drawString(key, x + 12, y + 12);
       }
-/*
+
       if(touch_button_list[i] != NULL)
       {
         delete(touch_button_list[i]);
       }
       touch_button_list[i++] = new TouchButton(x, y + 5, KEY_W, KEY_H, key.c_str());
-      */
     }
   }
 }
-/*
+
 void buttonEvent(TouchEvent& e)
 {
   TouchButton& b = *e.button;
@@ -174,28 +167,19 @@ void buttonEvent(TouchEvent& e)
   }
 
   // Clear input text area
-  lcd.fillRect(0, 0, M5.Lcd.width(), KEYBOARD_Y - 1, TFT_BLACK);
-  lcd.setFreeFont(FF2);
-  lcd.drawString(input_text, 0, 0);
+  M5.Lcd.fillRect(0, 0, M5.Lcd.width(), KEYBOARD_Y - 1, TFT_BLACK);
+  M5.Lcd.setFreeFont(FF2);
+  M5.Lcd.drawString(input_text, 0, 0);
 }
-*/
+
 void setup()
 {
-  Serial.begin(115200);
-  lcd.init();
+  M5.begin(true, false, true, true);
 
   initKeyboard();
 }
 
 void loop()
 {
-  int32_t x, y;
-  if (lcd.getTouch(&x, &y)) {
-    Serial.print(", x = ");
-    Serial.print(x);
-    Serial.print(", y = ");
-    Serial.println(y);
-//    display.fillRect(x-2, y-2, 5, 5, 0x0000FFU);
-  }
-
+  M5.update();
 }

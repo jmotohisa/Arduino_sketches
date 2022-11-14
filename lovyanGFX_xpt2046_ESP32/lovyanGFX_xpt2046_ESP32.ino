@@ -44,6 +44,7 @@ void setup(void)
   display.setTextSize((std::max(display.width(), display.height()) + 255) >> 8);
   
   // タッチが使用可能な場合のキャリブレーションを行います。（省略可）
+/*  
   if (display.touch())
   {
     if (display.width() < display.height()) display.setRotation(display.getRotation() ^ 1);
@@ -54,19 +55,22 @@ void setup(void)
     display.setTextDatum(textdatum_t::top_left);
 
     // タッチを使用する場合、キャリブレーションを行います。画面の四隅に表示される矢印の先端を順にタッチしてください。
+    
     std::uint16_t fg = TFT_WHITE;
     std::uint16_t bg = TFT_BLACK;
     if (display.isEPD()) std::swap(fg, bg);
     display.calibrateTouch(nullptr, fg, bg, std::max(display.width(), display.height()) >> 3);
   }
-
+*/
   display.fillScreen(TFT_BLACK);
 }
 
 uint32_t count = ~0;
 void loop(void)
 {
+  
   display.startWrite();
+  /*
   display.setRotation(++count & 7);
   display.setColorDepth((count & 8) ? 16 : 24);
 
@@ -83,14 +87,19 @@ void loop(void)
   display.drawRect(30,30,display.width()-60,display.height()-60,count*7);
   display.drawFastHLine(0, 0, 10);
 
-  display.endWrite();
-
+*/
 #ifdef USE_TOUCH
   int32_t x, y;
   if (display.getTouch(&x, &y)) {
-    Serial.print(x,y);
-    display.fillRect(x-2, y-2, 5, 5, count*7);
+    Serial.print(", x = ");
+    Serial.print(x);
+    Serial.print(", y = ");
+    Serial.println(y);
+//    display.fillRect(x-2, y-2, 5, 5, count*7);
+    display.fillRect(x-2, y-2, 5, 5, 0x0000FFU);
   }
 #endif
-  delay(100);
+
+  delay(30);
+  display.endWrite();
 }
