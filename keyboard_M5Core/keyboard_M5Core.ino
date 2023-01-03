@@ -48,11 +48,11 @@ typedef enum {
 String input_text;
 key_mode_t key_mode = KEY_MODE_LETTER;
 bool shift_mode = false;
-M5Touch *touch_button_list[COLS*ROWS];
+Button *touch_button_list[COLS*ROWS];
 
 void initKeyboard(void);
 void drawKeyboard(void);
-void buttonEvent(TouchEvent& e);
+void buttonEvent(Event& e);
 
 void initKeyboard()
 {
@@ -68,7 +68,7 @@ void initKeyboard()
   // Button C
   M5.Lcd.drawString("mode", 250, 225, 2);
 
-  M5.Touch.addHandler(buttonEvent, TE_BTNONLY + TE_TOUCH);
+  M5.Buttons.addHandler(buttonEvent, E_TOUCH);
   // Clear button list
   for(int i = 0; i < COLS*ROWS; i++)
   {
@@ -118,14 +118,14 @@ void drawKeyboard()
       {
         delete(touch_button_list[i]);
       }
-      touch_button_list[i++] = new TouchButton(x, y + 5, KEY_W, KEY_H, key.c_str());
+      touch_button_list[i++] = new Button(x, y + 5, KEY_W, KEY_H, key.c_str());
     }
   }
 }
 
-void buttonEvent(TouchEvent& e)
+void buttonEvent(Event& e)
 {
-  TouchButton& b = *e.button;
+  Button& b = *e.button;
 
   // Backspace
   if(e.button == &M5.BtnA)
@@ -157,13 +157,13 @@ void buttonEvent(TouchEvent& e)
   }
   else
   {
-    if(String(b.name) == "shift")
+    if(String(b.getName()) == "shift")
     {
       shift_mode = !shift_mode;
       drawKeyboard();
       return;
     }
-    input_text += b.name;
+    input_text += b.getName();
   }
 
   // Clear input text area

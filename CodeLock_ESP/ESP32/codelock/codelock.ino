@@ -1,3 +1,5 @@
+ // Originally taken from : https://www.hackster.io/hartmut-wendt/esp32-codelock-with-touch-7eb002
+ 
  /*
  *  Application note: Simple Keylock / Keypad for AZ-Touch and ESP32  
  *  Version 1.1
@@ -35,25 +37,25 @@
 // select one version and deselect the other versions
 #define AZ_TOUCH_ESP            // AZ-Touch ESP
 // #define AZ_TOUCH_MOD_SMALL_TFT  // AZ-Touch MOD with 2.4 inch TFT
-// #define AZ_TOUCH_MOD_BIG_TFT    // AZ-Touch MOD with 2.8 inch TFT
+#define AZ_TOUCH_MOD_BIG_TFT    // AZ-Touch MOD with 2.8 inch TFT
 
 /*____End of hardware selection___*/
 
 
 /*__Pin definitions for the ESP32__*/
-#define TFT_CS   5
-#define TFT_DC   4
-#define TFT_LED  15  
+#define TFT_CS   14
+#define TFT_DC   27
+//#define TFT_LED  15  
 #define TFT_MOSI 23
 #define TFT_CLK  18
-#define TFT_RST  22
+#define TFT_RST  33
 #define TFT_MISO 19
-#define TFT_LED  15  
+//#define TFT_LED  15  
 
-#define TOUCH_CS 14
+#define TOUCH_CS 5
 #ifdef AZ_TOUCH_ESP
   // AZ-Touch ESP
-  #define TOUCH_IRQ 2 
+  #define TOUCH_IRQ 4 
 #else
   // AZ-Touch MOD
   #define TOUCH_IRQ 27 
@@ -65,10 +67,10 @@
 
 /*____Calibrate Touchscreen_____*/
 #define MINPRESSURE 10      // minimum required force for touch event
-#define TS_MINX 370
-#define TS_MINY 470
-#define TS_MAXX 3700
-#define TS_MAXY 3600
+#define TS_MINY 370
+#define TS_MINX 470
+#define TS_MAXY 3700
+#define TS_MAXX 3600
 /*______End of Calibration______*/
 
 
@@ -82,8 +84,6 @@
 //XPT2046_Touchscreen touch(TOUCH_CS);
 Adafruit_ILI9341 tft = Adafruit_ILI9341(TFT_CS, TFT_DC, TFT_RST);
 XPT2046_Touchscreen touch(TOUCH_CS, TOUCH_IRQ);
-
-
 
 String symbol[4][4] = {
   { "7", "8", "9" },
@@ -102,7 +102,7 @@ TS_Point p;
 void setup() {
   Serial.begin(115200); //Use serial monitor for debugging
 
-  pinMode(TFT_LED, OUTPUT); // define as output for backlight control
+//  pinMode(TFT_LED, OUTPUT); // define as output for backlight control
 
   Serial.println("Init TFT and Touch...");
   tft.begin();
@@ -111,13 +111,13 @@ void setup() {
   tft.fillScreen(ILI9341_BLACK);
   
   IntroScreen();
-  digitalWrite(TFT_LED, LOW);    // LOW to turn backlight on; 
+//  digitalWrite(TFT_LED, LOW);    // LOW to turn backlight on; 
 
   delay(1500);
 
-  digitalWrite(TFT_LED, HIGH);    // HIGH to turn backlight off - will hide the display during drawing
+//  digitalWrite(TFT_LED, HIGH);    // HIGH to turn backlight off - will hide the display during drawing
   draw_BoxNButtons(); 
-  digitalWrite(TFT_LED, LOW);    // LOW to turn backlight on; 
+//  digitalWrite(TFT_LED, LOW);    // LOW to turn backlight on; 
 
   //sound configuration
   ledcSetup(0,1E5,12);
