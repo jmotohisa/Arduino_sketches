@@ -20,6 +20,8 @@
   SDcardディレクトリの中身をESP-WROOM-02に接続するSDカードのルートディレクトリにコピーしてください
 */
 
+// #define USE_BT_SERIAL
+
 #include <WiFi.h>
 #include <WiFiUdp.h>
 #include <Adafruit_GFX.h>
@@ -30,17 +32,19 @@
 #include <XPT2046_Touchscreen.h>
 #include <SD.h>
 #include <Wire.h>
-#include "RTClib.h"
-//#include "BluetoothSerial.h"
-
-//BluetoothSerial SerialBT;
-
+#include <RTClib.h>
 #include <Time.h>
 #include <TimeLib.h>
 
+
+#ifdef USE_BT_SERIAL
+  #include "BluetoothSerial.h"
+  BluetoothSerial SerialBT;
+#endif
+
 #include "NTP.h"
 #include "SDlogger.h"
-#include "WebServer.h"
+// #include "WebServer.h"
 
 #define UTC_TOKYO +9
 #include "mySSID.h"
@@ -96,8 +100,7 @@ R4(J4) (SCK)    | SCK
 RTC DS1307 (via level converter) | ESP32
 SCL | 22
 SDA | 21
-
- */
+*/
 #define TFT_CS 14
 #define TFT_RST 33
 #define TFT_DC 27
@@ -160,6 +163,9 @@ void setup()
   Wire.begin();
   Serial.println();
   Serial.println();
+#ifdef USE_BT_SERIAL
+  SerialBT.begin("BTThermoMonitor");
+#endif
 
   // We start by connecting to a WiFi network
   Serial.print("Connecting to ");
@@ -177,7 +183,7 @@ void setup()
   Serial.println(WiFi.localIP());
 
   ntp.udpSetup();
-  WifiServerinit();
+//  WifiServerinit();
 
   if(!RTC.begin())
     Serial.println("RTC not working. Skipping...");
@@ -188,6 +194,7 @@ void setup()
     RTC.adjust(DateTime(F(__DATE__), F(__TIME__)));
 //    RTC.adjust(ntp.getTime(&unixtime));
     }
+  setRTC();
   
   Serial.println("MAX31855 test");
   // wait for MAX chip to stabilize
@@ -207,7 +214,8 @@ void setup()
   tft.setRotation(1);
   ts.setRotation(1);
   
-  setSDStatus(sd.init());
+//  setSDStatus(sd.init());
+  sd.init();
 
   int w=tft.width(),h=tft.height();
   xmin=30;
@@ -221,7 +229,6 @@ void setup()
   tft.setCursor(0,17*3);tft.print((int) Tmax);
   tft.setCursor(0,17*13);tft.print((int) Tmin);
 
-//  SerialBT.begin("ESP32test");
 }
 
 void loop()
@@ -229,7 +236,7 @@ void loop()
   double c;
   DateTime now = RTC.now(); 
 
-  handleClient();
+//  handleClient();
   // 約50日ごとにおこるオーバーフロー時はmillsが0になるので引き算の結果はマイナス
   // とりうる値の範囲を考慮して割り算した結果同士を比較 (4,294,967,295)
   if((signed long)(millis()/1000000 - whenCountStarted/1000000) < 0){whenCountStarted = millis();}
@@ -238,6 +245,7 @@ void loop()
     whenCountStarted = millis();
 
     // 時間を取得
+    /*
     if((ntpAccsessTimes==0) && (ntp.getTime(&unixtime)))
     {
       ntpAccsessTimes++;
@@ -249,33 +257,48 @@ void loop()
     time_t t = unixtime + (UTC_TOKYO * 60 * 60); // 日本標準時に調整
     sprintf(date_ym, "%04d-%02d", year(t), month(t));
     sprintf(date_mdhm, "%2d/%02d-%02d:%02d", month(t), day(t),hour(t), minute(t));
+    */
+    sprintf(date_ym, "%04d-%02d", now.year(), now.month());
+    sprintf(date_mdhm, "%2d/%02d-%02d:%02d", now.month(), now.day(), now.hour(), now.minute());
+    
     Serial.println(date_ym);
     Serial.println(date_mdhm);
 
+    tft.setTextSize(2);
+    tft.fillRect(12*14,0,12*(14+10),14,ILI9341_BLACK);
+    tft.setCursor(12*14, 0);tft.print(date_mdhm);
+
     // センサからデータを取得
 
+    tft.setTextColor(ILI9341_WHITE);
+    tft.setCursor(0,0);
+    tft.fillRect(0,0,12*14,14,ILI9341_BLACK);
+    c = thermocouple.readCelsius();
+    if (isnan(c)) {
+      Serial.println("Something wrong with thermocouple!");
+      tft.setTextSize(1);
+      tft.println("Something wrong with thermocouple!");     
+    } else {
+      Serial.print("T = ");
+      Serial.print(c);
+      Serial.println("C");
+      tft.print("T = ");
+      tft.print(c);
+      tft.print("C");
+    }
+
+#ifdef USE_BT_SERIAL
+    SerialBT.print(date_mdhm);
+    SerialBT.print("\t");
+    SerialBT.println(c);
+#endif
+    // tft.setCursor(0,17);
+    // tft.setCursor(12*17,0);tft.print(c1);
     // double c1=thermocouple.readInternal();
     // Serial.print("Internal Temp = ");
     // Serial.println(c1);
-    // SerialBT.println(c1);
-    tft.setTextColor(ILI9341_WHITE);tft.setTextSize(2);
-    tft.setCursor(0,0);
-    tft.print("Internal Temp = ");
-    tft.setCursor(12*17,0);tft.print("     ");
-    // tft.setCursor(12*17,0);tft.print(c1);
-    c = thermocouple.readCelsius();
-    tft.setCursor(0,17);tft.print("                            ");
-    tft.setCursor(0,17);
-    if (isnan(c)) {
-      Serial.println("Something wrong with thermocouple!");
-      tft.println("Something wrong with thermocouple!");     
-    } else {
-      Serial.print("C = ");
-      Serial.println(c);
-      tft.print("C =      ");
-      tft.setCursor(12*4,17);
-      tft.print(c);
-    }
+//    tft.print("Internal Temp = ");
+//    tft.setCursor(0,17);tft.fillRect(0,17,12*17,17+14,ILI9341_BLACK);
 
     int x=i%(xmax-xmin)+xmin;
     int y=(c-Tmin)/(Tmax-Tmin)*(ymax-ymin)+ymin;
@@ -302,48 +325,6 @@ void loop()
     dataStream += String('0');
     sd.recordData(fileName,dataStream);
   }
-
- //   uint16_t x, y;
- //   ts.getPosition(x, y);
-/*
-    if (prev_x == 0xffff) {
-      ucg.drawPixel(x, y);
-    } else {
-      ucg.drawLine(prev_x, prev_y, x, y);
-    }
-    prev_x = x;
-    prev_y = y;
-  } else {
-    prev_x = prev_y = 0xffff;
-  }
-  */
-  
-  if (ts.tirqTouched()) {
-    Serial.println("Touch Int accepted.");
-    if (ts.touched()) {
-      TS_Point p = ts.getPoint();
-      //   uint16_t x, y;
-      //   ts.getPosition(x, y);
-    /*
-      if (prev_x == 0xffff) {
-      ucg.drawPixel(x, y);
-      } else {
-      ucg.drawLine(prev_x, prev_y, x, y);
-      }
-      prev_x = x;
-      prev_y = y;
-      } else {
-      prev_x = prev_y = 0xffff;
-      }
-    */
-    Serial.print("Pressure = ");
-    Serial.print(p.z);
-    Serial.print(", x = ");
-    Serial.print(p.x);
-    Serial.print(", y = ");
-    Serial.println(p.y);
-  }
-  }
 }
 
 void checkFile(char *fileName)
@@ -352,4 +333,13 @@ void checkFile(char *fileName)
   if(!dataFile) {
     SD.open(fileName);
   } 
+}
+
+void setRTC()
+{
+  if((ntp.getTime(&unixtime)))
+  {
+    time_t t = unixtime + (UTC_TOKYO * 60 * 60); // 日本標準時に調整
+    RTC.adjust(DateTime(year(t), month(t), day(t), hour(t), minute(t), second(t)));
+  }
 }

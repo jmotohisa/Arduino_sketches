@@ -108,6 +108,8 @@ BUTTON key1_ok1 = {120,170,45,45,"OK",KINFIN};
 BUTTON *key1_array[12] = { &key1_0, &key1_1, &key1_2, &key1_3, &key1_4, &key1_5, &key1_6, &key1_7,
 			   &key1_8, &key1_9, &key1_clr, &key1_ok1};
 
+#define CALIBRATION_POINT 20
+
 float calibration_x1;
 float calibration_y1;
 float delta_x,delta_y;
@@ -171,11 +173,11 @@ boolean is_touch_button(BUTTON *button) {
 }
 
 float convert_x(float x0){
-  return (20.0+(float)(x0-calibration_x1)*delta_x);
+  return (CALIBRATION_POINT+(float)(x0-calibration_x1)*delta_x);
 }
 
 float convert_y(float y0){
-  return (20.0+(float)(y0-calibration_y1)*delta_y);
+  return (CALIBRATION_POINT+(float)(y0-calibration_y1)*delta_y);
 }
 
 void printpoint_raw(TS_Point p){
@@ -201,8 +203,8 @@ void printpoint_calibed(TS_Point p){
 
 
 void calibration (void) {
-  drawCrossPoint(20, 20, ILI9341_RED);
-  drawCrossPoint(220, 300, ILI9341_WHITE);
+  drawCrossPoint(CALIBRATION_POINT, CALIBRATION_POINT, ILI9341_RED);
+  drawCrossPoint(tft.width()-CALIBRATION_POINT, tft.height()-CALIBRATION_POINT, ILI9341_WHITE);
 
   Serial.println("Calibration: touch red star:");
   
@@ -229,8 +231,8 @@ void calibration (void) {
   
   delay(1000);
   
-  drawCrossPoint(20, 20, ILI9341_WHITE);
-  drawCrossPoint(220, 300, ILI9341_RED);
+  drawCrossPoint(CALIBRATION_POINT, CALIBRATION_POINT, ILI9341_WHITE);
+  drawCrossPoint(tft.width()-CALIBRATION_POINT, tft.height()-CALIBRATION_POINT, ILI9341_RED);
 
   count = 0;
   sum_x = 0.0;
@@ -253,11 +255,11 @@ void calibration (void) {
   Serial.print(calibration_y2);
   Serial.println(")");
 
-  delta_x = 200.0/ (calibration_x2-calibration_x1);
-  delta_y = 280.0/ (calibration_y2-calibration_y1);
+  delta_x = (tft.width()-CALIBRATION_POINT*2)/ (calibration_x2-calibration_x1);
+  delta_y = (tft.height()-CALIBRATION_POINT*2)/ (calibration_y2-calibration_y1);
 
-  drawCrossPoint(20, 20, ILI9341_BLACK);
-  drawCrossPoint(220, 300, ILI9341_BLACK);
+  drawCrossPoint(CALIBRATION_POINT, CALIBRATION_POINT, ILI9341_BLACK);
+  drawCrossPoint((tft.width()-CALIBRATION_POINT), (tft.height()-CALIBRATION_POINT), ILI9341_BLACK);
 
   char s[64];
   Serial.print("Cal(");
@@ -289,8 +291,6 @@ int check_key1(int val_old) {
   char *key;
   int ikey;
   int val;
-  
-//  tft.fillScreen(ILI9341_BLACK);
 
   Serial.print("Keyboard:status ");
   Serial.println(status);
@@ -336,20 +336,25 @@ int check_key1(int val_old) {
 int touched2(BUTTON **key_array,int narray)
 {
   TS_Point point;
-  int ikey;
+  int ikey=-1;
   boolean valid=false;
   if(ts.touched()) {
     point = ts.getPoint();
+    printpoint_raw(point);
+    printpoint_calibed(point);
       for(uint8_t i=0;i<narray;i++) {
-  if(is_in_area(key_array[i],point)) {
-    valid = true;
-    ikey = i;
-    draw_button(key_array[ikey],ILI9341_RED);
-  }
+        if(is_in_area(key_array[i],point)) {
+          valid = true;
+          ikey = i;
+          draw_button(key_array[ikey],ILI9341_RED);
+        }
       }
   } else {
     return -1;
   }
+
+  if(ikey<0)
+    return -1;
 
   while(ts.touched()) {
     point = ts.getPoint();
@@ -364,7 +369,8 @@ int touched2(BUTTON **key_array,int narray)
     return ikey;
   else
     return -1;
-  }
+}
+
 void setup() {
   Serial.begin(115200);
 
@@ -372,12 +378,16 @@ void setup() {
   
 //  Wire.begin();
 
-  ts.begin();
-  ts.setRotation(2);
-
   tft.begin();
-  tft.setRotation(2);
+  tft.setRotation(1);
   tft.fillScreen(ILI9341_BLACK);
+  Serial.print("TFT width:");
+  Serial.println(tft.width());
+  Serial.print("TFT height:");
+  Serial.println(tft.height());
+
+  ts.begin();
+  ts.setRotation(1);
 
   calibration();
 
@@ -395,6 +405,8 @@ void loop() {
   int ikey;
 
   if((ikey = touched2(key0_array,2))>=0) {
+    Serial.print("ikey=");
+    Serial.println(ikey);
     key= key0_array[ikey]->key;
     status = key0_array[ikey]->status;
     Serial.println(status);
@@ -408,6 +420,7 @@ void loop() {
     Serial.println("Status: INPKEY");
     delay(100);
     touch_pressed = false;
+    tft.fillScreen(ILI9341_BLACK);
     draw_keys1();
     num = check_key1(203);
     Serial.println(num);
