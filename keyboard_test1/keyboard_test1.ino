@@ -114,7 +114,6 @@ float delta_x,delta_y;
 bool touch_pressed=false;
 bool touch_released=false;
 TS_Point g_point;
-int status=0;
 
 void draw_button(BUTTON *button, uint16_t color) {
   tft.drawRect(button->x,button->y,button->w,button->t,color);
@@ -292,9 +291,8 @@ int check_key1(int val_old) {
   int val;
   
 //  tft.fillScreen(ILI9341_BLACK);
-  tft.setCursor(0,0);
 
-  Serial.print("Keyboard:status");
+  Serial.print("Keyboard:status ");
   Serial.println(status);
   
   do {
@@ -304,16 +302,15 @@ int check_key1(int val_old) {
     }
     switch (status) {
     case KEYIN:
+      tft.setCursor(bufptr*12,0);
       tft.print(key);
       strbuf[bufptr]=*key;
       bufptr++;
       status = SKIP;
       break;
     case KEYCLR:
+      tft.fillRect(0,0,bufptr*12,14,ILI9341_BLACK);
       bufptr=0;
-      tft.setCursor(0,0);
-      tft.print("          ");
-      tft.setCursor(0,0);
       status=SKIP;
       break;
     case KINFIN:
@@ -328,7 +325,7 @@ int check_key1(int val_old) {
   }
   while(loopstatus);
   
-  if(bufptr==0) {
+  if(bufptr<=1) {
     val = val_old;
   } else {
     val = atoi(strbuf);
@@ -347,7 +344,7 @@ int touched2(BUTTON **key_array,int narray)
   if(is_in_area(key_array[i],point)) {
     valid = true;
     ikey = i;
-    draw_button(key_array[ikey],ILI9341_WHITE);
+    draw_button(key_array[ikey],ILI9341_RED);
   }
       }
   } else {
@@ -362,6 +359,7 @@ int touched2(BUTTON **key_array,int narray)
     }
   }
 
+  draw_button(key_array[ikey],ILI9341_WHITE);
   if(valid)
     return ikey;
   else
@@ -391,7 +389,7 @@ void setup() {
 
 void loop() {
   char *key='\0';
-//  int status;
+  int status=WAIT;
   int num;
   int i;
   int ikey;
@@ -418,7 +416,6 @@ void loop() {
     status = WAIT;
     break;        
   default:
-    Serial.println(status);
     break;
   }
   delay(50);
