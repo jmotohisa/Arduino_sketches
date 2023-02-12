@@ -88,9 +88,10 @@ BUTTON key0_0 = { 20, 20,45,45,"W",WAIT};
 BUTTON key0_1= { 70, 20,45,45,"N",INPKEY};
 BUTTON *key0_array[2] = { &key0_0, &key0_1};
 
-#define KEYIN 0
+#define KEYIN  0
 #define KEYCLR 1
 #define KINFIN 2
+#define SKIP   3
 BUTTON key1_7 = { 20, 20,45,45,"7",KEYIN};
 BUTTON key1_8 = { 70, 20,45,45,"8",KEYIN};
 BUTTON key1_9 = {120, 20,45,45,"9",KEYIN};
@@ -111,6 +112,7 @@ float calibration_x1;
 float calibration_y1;
 float delta_x,delta_y;
 bool touch_pressed=false;
+bool touch_released=false;
 TS_Point g_point;
 int status=0;
 
@@ -121,7 +123,7 @@ void draw_button(BUTTON *button, uint16_t color) {
 //  char s[3] = {button->key,'\0'};
   char s[3];
   strcpy(s,button->key);
-  Serial.println(s);
+//  Serial.println(s);
 //  strcat(s,'\0');
 //  Serial.println(s);
   tft.setTextSize(2);
@@ -281,11 +283,13 @@ void drawCrossPoint(uint16_t x, uint16_t y,uint16_t color){
 #define MAXLEN 256
  char strbuf[MAXLEN];
 
-int check_key1() {
-  int status=KEYIN;
+int check_key1(int val_old) {
+  int status=SKIP;
   uint8_t bufptr=0;
   boolean loopstatus=true;
   char *key;
+  int ikey;
+  int val;
   
 //  tft.fillScreen(ILI9341_BLACK);
   tft.setCursor(0,0);
@@ -294,42 +298,75 @@ int check_key1() {
   Serial.println(status);
   
   do {
+    if((ikey=touched2(key1_array,12)) >= 0) {
+      key = key1_array[ikey]->key;
+      status = key1_array[ikey]->status;
+    }
     switch (status) {
     case KEYIN:
-      for(uint8_t i=0;i<12;i++) {
-	      if(is_touch_button(key1_array[i]))
-	        {
-	          key= key1_array[i]->key;
-	          status = key1_array[i]->status;
-	        }
-      	if(status==KEYIN) {
-	        tft.print(key);
-	        strbuf[bufptr]=*key;
-	        bufptr++;
-	      }
-      }
+      tft.print(key);
+      strbuf[bufptr]=*key;
+      bufptr++;
+      status = SKIP;
       break;
     case KEYCLR:
       bufptr=0;
-      status=KEYIN;
       tft.setCursor(0,0);
       tft.print("          ");
+      tft.setCursor(0,0);
+      status=SKIP;
       break;
     case KINFIN:
       strbuf[bufptr]='\0';
       bufptr++;
       loopstatus=false;
       break;
+    case SKIP:
     default:
       break;
     }
   }
   while(loopstatus);
-
-  return atoi(strbuf);
   
+  if(bufptr==0) {
+    val = val_old;
+  } else {
+    val = atoi(strbuf);
+  }
+  return val;
 }
-  
+
+int touched2(BUTTON **key_array,int narray)
+{
+  TS_Point point;
+  int ikey;
+  boolean valid=false;
+  if(ts.touched()) {
+    point = ts.getPoint();
+      for(uint8_t i=0;i<narray;i++) {
+  if(is_in_area(key_array[i],point)) {
+    valid = true;
+    ikey = i;
+    draw_button(key_array[ikey],ILI9341_WHITE);
+  }
+      }
+  } else {
+    return -1;
+  }
+
+  while(ts.touched()) {
+    point = ts.getPoint();
+    if(!is_in_area(key_array[ikey],point)) {
+      valid = false;
+      draw_button(key_array[ikey],ILI9341_WHITE);
+    }
+  }
+
+  if(valid)
+    return ikey;
+  else
+    return -1;
+  }
 void setup() {
   Serial.begin(115200);
 
@@ -357,60 +394,32 @@ void loop() {
 //  int status;
   int num;
   int i;
+  int ikey;
 
-  if(touched2()) {
-    for(i=0;i<2;i++) {
-      if(is_touch_button(key0_array[i]))
-      { 
-        key= key0_array[i]->key;
-        status = key0_array[i]->status;
-        Serial.println(status);
-      }
-    }          
+  if((ikey = touched2(key0_array,2))>=0) {
+    key= key0_array[ikey]->key;
+    status = key0_array[ikey]->status;
+    Serial.println(status);
+  }
   
-    switch (status) {
-      case WAIT:
-        Serial.println("Status: WAIT");
-        break;
-      case INPKEY:
-        Serial.println("Status: INPKEY");
-        delay(100);
-        touch_pressed = false;
-        draw_keys1();
-        num = check_key1();
-        Serial.println(num);
-        tft.fillScreen(ILI9341_BLACK);
-        draw_keys0();
-        break;        
-      default:
-        Serial.println(status);
-        break;
-    }
+  switch (status) {
+  case WAIT:
+//    Serial.println("Status: WAIT");
+    break;
+  case INPKEY:
+    Serial.println("Status: INPKEY");
+    delay(100);
+    touch_pressed = false;
+    draw_keys1();
+    num = check_key1(203);
+    Serial.println(num);
+    tft.fillScreen(ILI9341_BLACK);
+    draw_keys0();
+    status = WAIT;
+    break;        
+  default:
+    Serial.println(status);
+    break;
   }
   delay(50);
-}
-
-boolean touched2()
-{
-  if(touch_pressed == false)
-  {
-    if(ts.touched()==true)
-    {
-      touch_pressed = true;
-      g_point = ts.getPoint();
-      printpoint_raw(g_point);
-      printpoint_calibed(g_point);
-      return true;
-    } else {
-      return false;
-    }
-  } else {
-    if(ts.touched()==true) 
-    {
-      return false;
-    } else {
-      touch_pressed = false;
-      return false;
-    }
-  }
 }
