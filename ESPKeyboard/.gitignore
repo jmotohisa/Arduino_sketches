@@ -2,5 +2,3 @@ Arduino_libs
 libraries
 build-uno/
 mySSID.h
-ESPKeyboard/gui_backup
-ESPWiFi_SD_Logger

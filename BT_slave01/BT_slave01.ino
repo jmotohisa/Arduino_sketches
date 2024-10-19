@@ -32,25 +32,28 @@ void setup() {
   Serial.printf("%02X:%02X:%02X:%02X:%02X:%02X\r\n", macBT[0], macBT[1], macBT[2], macBT[3], macBT[4], macBT[5]);
   // 電源ON時のシリアルデータが無くなるまで待つ
   while (Serial.available()) {data = Serial.read();}
-  M5.Lcd.setTextFont(4);  // テキストサイズ変更
+  M5.Lcd.setTextFont(2);  // テキストサイズ変更
+
+//  WiFi.setSleep(false);
 }
 // メイン -------------------------------------------------
 void loop() {
   M5.update();  // 本体のボタン状態更新
   // ボタン操作処理（マスター側へデータ送信）
-  if (M5.BtnA.wasPressed()) {   // ボタンAが押されていれば
-    SerialBT.print("A ON!\r");  // 「A ON!」送信（「CR」区切り文字）
+  if (M5.BtnA.wasReleased()) {   // ボタンAが押されていれば
+    SerialBT.print("slave A ON!\r");  // 「A ON!」送信（「CR」区切り文字）
   }
-  if (M5.BtnB.wasPressed()) {   // ボタンBが押されていれば
-    SerialBT.print("B ON!\r");  // 「B ON!」送信（「CR」区切り文字）
+  if (M5.BtnB.wasReleased()) {   // ボタンBが押されていれば
+    SerialBT.print("slave B ON!\r");  // 「B ON!」送信（「CR」区切り文字）
   }
+
   // データ受信時処理
   // スレーブからの受信データをLCDに表示
   if (SerialBT.available()) {               // Bluetoothデータ受信で
     data = SerialBT.readStringUntil('\r');  // 区切り文字「CR」の手前までデータ取得
     M5.Lcd.print("BT: ");                   // 受信データ液晶表示
     M5.Lcd.println(data);                   // 液晶表示は改行あり
-    Serial.print(data);                     // シリアル出力は改行なし
+    Serial.println(data);                     // シリアル出力は改行なし→あり
   }
   // シリアル入力データ（「CR」付きで入力）をスレーブ側へ送信
   if (Serial.available()) {               // シリアルデータ受信で

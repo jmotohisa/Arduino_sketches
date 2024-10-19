@@ -1,3 +1,5 @@
+
+
 /*
   ESPWiFi_Temp_Logger.ino
 */
@@ -46,7 +48,7 @@
 #endif
 
 #ifdef ENABLE_WEBSERVER
-  #include "WebServer.h"
+  #include "WebServer_temp.h"
 #endif
 
 #define UTC_TOKYO +9
@@ -671,7 +673,7 @@ void loop()
     num = check_key1(203);
     Serial.println(num);
     tft.fillScreen(ILI9341_BLACK);
-    draw_keys0();
+  //  draw_keys0();
     status = LOOP;
     break;        
   default:
