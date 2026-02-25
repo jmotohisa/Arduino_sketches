@@ -252,7 +252,7 @@ bool InitOverlays()
 void setup()
 {
   // Initialize debug output
-  Serial.begin(9600);
+  Serial.begin(115200);
   gslc_InitDebug(&DebugOut);
   //delay(1000);  // NOTE: Some devices require a delay after Serial.begin() before serial port can be used
 

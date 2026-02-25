@@ -339,6 +339,7 @@ void calibration (void) {
     }
     if(count==10) break;
   }
+  
   float calibration_x2 = sum_x / 10.0;
   float calibration_y2 = sum_y / 10.0;
   Serial.print("Calibration (x2,y2)=(");
@@ -346,6 +347,8 @@ void calibration (void) {
   Serial.print(",");
   Serial.print(calibration_y2);
   Serial.println(")");
+  
+  delay(1000);
 
   delta_x = (tft.width()-CALIBRATION_POINT*2)/ (calibration_x2-calibration_x1);
   delta_y = (tft.height()-CALIBRATION_POINT*2)/ (calibration_y2-calibration_y1);
